@@ -67,6 +67,22 @@
 
   function setMood(mood) { el.avatar.setAttribute('data-mood', mood || 'neutral'); }
 
+  // Feedback: BrewBot gives a small nod each time an answer is saved to the order.
+  function nod() {
+    var svg = el.avatar.querySelector('.avatar-svg');
+    svg.classList.remove('nod');
+    void svg.getBoundingClientRect(); // restart the animation if it is already running
+    svg.classList.add('nod');
+  }
+
+  // Visibility of status: while the mic is on, the rings glow only when speech is actually being heard.
+  var hearingTimer = null;
+  function hearing() {
+    el.avatar.classList.add('hearing');
+    clearTimeout(hearingTimer);
+    hearingTimer = setTimeout(function () { el.avatar.classList.remove('hearing'); }, 450);
+  }
+
   /* ---------------- chat bubbles ---------------- */
 
   function scrollDown() { el.chatLog.scrollTop = el.chatLog.scrollHeight; }
@@ -178,6 +194,7 @@
 
   function renderOrder() {
     var o = dialogue.order;
+    var saved = false;
     el.orderList.innerHTML = '';
     BB.SLOT_ORDER.forEach(function (slot) {
       var li = document.createElement('li');
@@ -185,6 +202,7 @@
       var asking = dialogue.current === slot && dialogue.phase === 'asking';
       if (asking) li.className = 'asking';
       var now = JSON.stringify(o[slot]);
+      if (filled && ui.prevOrder[slot] !== now) saved = true;
       if (filled && ui.prevOrder[slot] !== undefined && ui.prevOrder[slot] !== now) li.classList.add('flash');
       ui.prevOrder[slot] = now;
 
@@ -199,6 +217,7 @@
     });
 
     if (BB.Preview) BB.Preview.update(o);
+    if (saved) nod();
 
     var t = dialogue.totals();
     if (t) {
@@ -381,7 +400,7 @@
         el.interim.textContent = 'Listening... say your answer';
         el.interim.classList.add('show');
       },
-      onPartial: function (text) { el.interim.textContent = text; },
+      onPartial: function (text) { el.interim.textContent = text; hearing(); },
       onFinal: function (text, info) {
         resetMic();
         submit(text, 'voice', info);

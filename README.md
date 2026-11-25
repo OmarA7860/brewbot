@@ -6,7 +6,7 @@ BrewBot is an animated coffee-cup avatar that takes your pickup order by **voice
 It remembers what you've said, asks only for what's missing, shows your drink being built as you go, and
 confirms everything before placing the order. Made for the SOFE4850 UX Project at Ontario Tech University (Fall 2026).
 
-**Live demo:** https://OmarA7860.github.io/brewbot/ &nbsp;(open in **Microsoft Edge** or **Google Chrome** on a computer)
+**Live demo:** https://YOUR-USERNAME.github.io/brewbot/ &nbsp;(open in **Microsoft Edge** or **Google Chrome** on a computer)
 
 ![BrewBot ordering page](docs/screenshots/main.png)
 
@@ -19,7 +19,7 @@ confirms everything before placing the order. Made for the SOFE4850 UX Project a
 | 🎙️ **Talk, type or tap** | Press **Talk** (or `Ctrl + M`) and speak, type and press Enter, or tap an option. Mix them freely. |
 | 🧠 **Several details at once** | "Two large iced oat lattes with vanilla" fills five answers in one go. BrewBot only asks for the rest. |
 | ☕ **Live drink preview** | A cartoon mug builds your drink as you answer: colour, size, steam or ice, milk, whipped cream, syrup and quantity. |
-| 👀 **Always shows its state** | The avatar's face shows when it is listening, thinking, speaking, confused, paused or done. |
+| 👀 **Always shows its state** | The avatar's face shows when it is listening, thinking, speaking, confused, paused or done. It glows when it actually hears your voice and nods each time it saves an answer. |
 | ✏️ **Fix anything, anytime** | Say "actually, make it almond milk", click **Edit** on any row, or press **Back**. Nothing forces a restart. |
 | 🔁 **Recovers from mishearing** | Shows exactly what it heard, with **Retry** and **Edit**. Reads spoken names back before saving them. |
 | ✅ **Confirms before ordering** | Reads back the full order and shows it as an easy-to-scan receipt with the total, and only places it after a clear "yes". |

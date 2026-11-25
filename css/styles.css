@@ -159,6 +159,13 @@ button { font: inherit; cursor: pointer; }
 .avatar[data-state="listening"] .rings circle:nth-child(2) { animation-delay: .6s; }
 .avatar[data-state="listening"] .rings circle:nth-child(3) { animation-delay: 1.2s; }
 @keyframes ring { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(1.45); opacity: 0; } }
+/* speech is being heard right now: rings thicken and the cup glows */
+.avatar .avatar-svg { transition: filter .15s ease; }
+.avatar.hearing[data-state="listening"] .avatar-svg { filter: drop-shadow(0 0 12px rgba(194, 59, 48, .55)); }
+.avatar.hearing[data-state="listening"] .rings circle { stroke-width: 7; }
+/* answer saved: a small nod */
+.avatar-svg.nod { animation: nod .55s ease-in-out; transform-origin: 110px 190px; }
+@keyframes nod { 0%, 100% { transform: rotate(0) translateY(0); } 30% { transform: rotate(-4deg) translateY(4px); } 60% { transform: rotate(2deg) translateY(-2px); } }
 .avatar[data-state="listening"] .mouth-smile { display: none; }
 .avatar[data-state="listening"] .mouth-o { display: inline; }
 .avatar[data-state="listening"] .brows { transform: translateY(-3px); }
@@ -241,9 +248,9 @@ button { font: inherit; cursor: pointer; }
 .mic-btn {
   display: flex; align-items: center; gap: 8px; padding: 0 20px;
   border: 0; border-radius: 999px; background: var(--espresso); color: #fff; font-weight: 700; font-size: 16px;
-  min-width: 110px; justify-content: center;
+  min-width: 150px; min-height: 56px; justify-content: center; font-size: 18px;
 }
-.mic-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.mic-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .mic-btn:hover { background: var(--espresso-dark); }
 .mic-btn.listening { background: var(--red); box-shadow: 0 0 0 0 rgba(194, 59, 48, .5); animation: micPulse 1.4s infinite; }
 @keyframes micPulse { 70% { box-shadow: 0 0 0 12px rgba(194, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(194, 59, 48, 0); } }

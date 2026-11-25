@@ -155,6 +155,9 @@ with sync_playwright() as p:
     speak(page, "two large iced oat lattes with vanilla")
     check("2 large iced lattes" in last_bot(page), "voice fills 5 slots at once")
     check(page.locator(".msg.user .msg-meta", has_text="Heard by voice").count() >= 1, "shows 'Heard by voice' with Retry/Edit")
+    check(page.evaluate("document.querySelector('.avatar-svg').classList.contains('nod')"), "avatar nods when answers are saved")
+    mb = page.locator("#micBtn").bounding_box()
+    check(mb["width"] >= 150 and mb["height"] >= 56, "Talk button is a large target (Fitts' law)")
     shot(page, "05-voice-multi")
 
     # ---------- Test case: correction ----------
