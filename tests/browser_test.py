@@ -103,7 +103,8 @@ def new_page(browser):
     page = ctx.new_page()
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.on("console", lambda m: m.type == "error" and errors.append(m.text))
+    # Downloads that are blocked on the test machine (e.g. the natural-voice model) are not code errors.
+    page.on("console", lambda m: m.type == "error" and "Failed to load resource" not in m.text and errors.append(m.text))
     page.goto(URL)
     return page, errors
 
@@ -130,9 +131,10 @@ with sync_playwright() as p:
     type_answer(page, "Maya")
     tap(page, "Card at pickup")
     check("Should I place the order" in last_bot(page), "reaches confirmation")
+    check(page.locator(".receipt").count() == 1 and "Total with HST" in page.locator(".receipt").inner_text(), "receipt card at confirmation")
     shot(page, "03-confirmation")
     check("medium hot latte" in page.get_attribute("#pvSvg", "aria-label").lower(), "drink preview describes the drink")
-    tap(page, "Yes, place my order")
+    page.locator(".btn-place").click(); time.sleep(0.2); wait_idle(page)
     check("order number" in last_bot(page), "order placed")
     check(page.locator(".tracker").count() == 1 and "Received" in page.locator(".tracker").inner_text(), "order tracker appears")
     page.locator(".tr-skip").click(); time.sleep(0.3)
@@ -248,6 +250,20 @@ with sync_playwright() as p:
     summary = page.locator("#logSummary").inner_text()
     check("Voice retries" in summary, "test log summary shows")
 
+    # ---------- Cancel an order within the first minute ----------
+    page3b = page2
+    page3b.click("#restartCtrl"); wait_idle(page3b)
+    if page3b.locator("#quickReplies .chip", has_text="Yes, start over").count():
+        tap(page3b, "Yes, start over")
+    for t in ["small hot americano no milk", "no extras", "1", "ASAP", "Sam", "cash"]:
+        type_answer(page3b, t)
+    page3b.locator(".btn-place").click(); time.sleep(0.2); wait_idle(page3b)
+    page3b.locator(".tracker:not(.old) .tr-cancel").click()
+    check("Click again" in page3b.locator(".tracker:not(.old) .tr-cancel").inner_text(), "cancel asks for a second click")
+    page3b.locator(".tracker:not(.old) .tr-cancel").click(); time.sleep(0.2); wait_idle(page3b)
+    check("cancelled" in last_bot(page3b) and page3b.locator(".tracker.cancelled").count() == 1, "order cancelled")
+    shot(page3b, "18-cancelled")
+
     # ---------- Voice speed ----------
     page2.locator('.seg button[data-speed="slower"]').click()
     check(page2.get_attribute('.seg button[data-speed="slower"]', "aria-pressed") == "true", "speed button selected")
@@ -270,6 +286,8 @@ with sync_playwright() as p:
     check("type everything" in page3.locator("#voiceNote").inner_text(), "no-voice browsers told to type")
     check(page3.locator("#micBtn").is_disabled(), "mic disabled without voice support")
 
+    vs = page2.locator("#voiceStatus").inner_text()
+    check(vs in ("Standard browser voice", "Voice not available") or vs.startswith("Natural voice") or vs.startswith("Loading"), "voice status shown: " + vs)
     check(not errors and not errors2, "no JavaScript errors: " + "; ".join(errors + errors2))
     browser.close()
 

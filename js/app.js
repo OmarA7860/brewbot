@@ -81,6 +81,9 @@
     p.textContent = reply.text;
     bubble.appendChild(p);
 
+    // At the final confirmation, show the order as an easy-to-scan receipt with clear buttons.
+    if (reply.showReceipt) bubble.appendChild(receiptCard());
+
     // When a voice answer may have been misheard, offer Retry and Type instead right here.
     if (reply.heardCheck && ui.lastTurn && ui.lastTurn.mode === 'voice') {
       var row = document.createElement('div');
@@ -93,6 +96,36 @@
     el.chatLog.appendChild(wrap);
     scrollDown();
     return wrap;
+  }
+
+  /*
+   * Receipt shown at the final confirmation. A long spoken sentence is hard to
+   * check by eye, so the same summary is laid out as lines the user can scan
+   * (recognition rather than recall), with the total and the two choices as buttons.
+   */
+  function receiptCard() {
+    var o = dialogue.order, t = dialogue.totals(), money = BB.Dialogue.money;
+    var card = document.createElement('div');
+    card.className = 'receipt';
+    var extras = (o.extras || []).filter(function (e) { return e !== 'none'; }).map(function (e) { return BB.option('extras', e).label; });
+    var rows = [
+      ['Drink', (o.quantity > 1 ? o.quantity + ' \u00d7 ' : '') + BB.option('size', o.size).label + ' ' + (o.drink === 'coldbrew' ? '' : (o.temp === 'iced' ? 'iced ' : 'hot ')) + BB.option('drink', o.drink).label.toLowerCase(), 'drink'],
+      ['Milk', BB.option('milk', o.milk).label, 'milk'],
+      ['Extras', extras.length ? extras.join(', ') : 'None', 'extras'],
+      ['Pickup', dialogue.displayValue('pickup'), 'pickup'],
+      ['Name', o.name, 'name'],
+      ['Payment', BB.option('payment', o.payment).label, 'payment']
+    ];
+    var html = '<p class="rc-title">Please check your order</p><dl>';
+    rows.forEach(function (r) { html += '<dt>' + r[0] + '</dt><dd>' + escapeHTML(r[1]) + '</dd>'; });
+    html += '</dl><div class="rc-total"><span>Total with HST</span><span>' + money(t.total) + '</span></div>';
+    card.innerHTML = html;
+    var actions = document.createElement('div');
+    actions.className = 'rc-actions';
+    actions.appendChild(makeButton('Place my order', 'btn-place', function () { submit('Yes, place my order', 'button'); }));
+    actions.appendChild(makeButton('Change something', 'btn-small ghost', function () { submit('Change something', 'button'); }));
+    card.appendChild(actions);
+    return card;
   }
 
   function addUserMessage(text, mode) {
@@ -111,6 +144,8 @@
       meta.appendChild(makeButton('Edit', '', editVoice, 'Fix that answer by typing'));
       wrap.appendChild(meta);
     }
+    // Buttons on an older receipt no longer apply once the user has answered.
+    Array.prototype.forEach.call(el.chatLog.querySelectorAll('.rc-actions'), function (r) { r.remove(); });
     // Only the most recent voice answer can be retried, so older Retry/Edit links are removed.
     Array.prototype.forEach.call(el.chatLog.querySelectorAll('.msg-meta button, .heard-check'), function (b) { b.remove(); });
     el.chatLog.appendChild(wrap);
@@ -207,6 +242,10 @@
     renderQuick([]);
     setState('thinking');
 
+    // The final summary gets a receipt card with its own buttons, so the quick replies are not repeated.
+    reply.showReceipt = reply.phase === 'confirm' && dialogue.phase === 'confirm' &&
+      (reply.quick || []).some(function (q) { return q.value === 'Yes, place my order'; });
+
     ui.replyTimer = setTimeout(function () {
       var node = addBotMessage(reply);
       if (ui.lastTurn && opts.fromTurn) ui.lastTurn.botNode = node;
@@ -214,7 +253,7 @@
       if (reply.speed) setSpeed(stepSpeed(reply.speed), false);
       if (reply.outcome === 'greeting' || reply.outcome === 'restart') stopTracker();
       if (reply.outcome === 'completed') startTracker();
-      renderQuick(reply.quick);
+      renderQuick(reply.showReceipt ? [] : reply.quick);
       renderOrder();
       BB.Log.add('bot', { text: reply.text, outcome: reply.outcome, slot: reply.current || '' });
 
@@ -253,6 +292,11 @@
   function submit(text, mode, meta) {
     text = String(text || '').trim();
     if (!text || !ui.started) return;
+    if (dialogue.phase === 'done' && tracker && tracker.canCancel() && /\bcancel\b/i.test(text)) {
+      addUserMessage(text, mode);
+      cancelOrder();
+      return;
+    }
     if (ui.paused) leavePause(false);
     BB.Speech.stopSpeaking();
     if (mode !== 'voice') BB.Speech.stopListening();
@@ -323,6 +367,11 @@
     clearTimeout(ui.idleTimer);
     clearTimeout(ui.replyTimer);
     ui.busy = false;
+    // Feedback while the microphone starts (the browser may be asking for permission).
+    el.status.setAttribute('data-state', 'thinking');
+    el.statusText.textContent = 'Starting the microphone';
+    el.interim.textContent = 'Starting the microphone\u2026 click Allow if your browser asks';
+    el.interim.classList.add('show');
     BB.Speech.startListening({
       onStart: function () {
         setState('listening');
@@ -403,6 +452,7 @@
   /* ---------------- start ---------------- */
 
   function startOrder() {
+    BB.Speech.unlockAudio();
     ui.started = true;
     el.welcome.hidden = true;
     el.chatLog.hidden = false;
@@ -488,7 +538,7 @@
    * ("slow down", "talk faster"), and the chosen one is always visible.
    * The choice is remembered on this computer only.
    */
-  var SPEEDS = { slower: 0.8, normal: 0.95, faster: 1.15 };
+  var SPEEDS = { slower: 0.85, normal: 1.0, faster: 1.15 };
   var THINK_BY_SPEED = { slower: 520, normal: 380, faster: 220 };
   var speedNow = 'normal';
   var speedButtons = Array.prototype.slice.call(document.querySelectorAll('.seg button'));
@@ -536,7 +586,9 @@
     if (!p) return;
     var placedAt = new Date(p.placedAt).getTime();
     var ready = new Date(p.ready).getTime();
-    var makingAt = Math.max(placedAt + 15000, ready - BB.SHOP.prepMinutes * 60000);
+    // ASAP orders wait in the queue for a minute before a barista starts, which is
+    // also the window in which the order can still be cancelled.
+    var makingAt = Math.max(placedAt + 60000, ready - BB.SHOP.prepMinutes * 60000);
     var fmt = BB.Dialogue.formatTime;
 
     var card = document.createElement('div');
@@ -560,11 +612,27 @@
       BB.Log.add('tracker_skip', {});
       tick();
     });
-    card.appendChild(skip);
+    // Cancel: allowed until a barista starts making the drink. Two clicks, so it
+    // can't happen by accident (error prevention), with a clear result (feedback).
+    var cancelArmed = null;
+    var cancel = makeButton('Cancel order', 'link-btn tr-cancel', function () {
+      if (!cancelArmed) {
+        cancel.textContent = 'Click again to cancel order #' + p.number;
+        cancelArmed = setTimeout(function () { cancelArmed = null; cancel.textContent = 'Cancel order'; }, 4000);
+        return;
+      }
+      clearTimeout(cancelArmed);
+      cancelOrder();
+    });
+    var links = document.createElement('div');
+    links.className = 'tr-links';
+    links.appendChild(cancel);
+    links.appendChild(skip);
+    card.appendChild(links);
     el.chatLog.appendChild(card);
     scrollDown();
 
-    tracker = { card: card, offset: 0, stage: 0, timer: null, skip: skip };
+    tracker = { card: card, offset: 0, stage: 0, timer: null, skip: skip, cancel: cancel, number: p.number, canCancel: function () { return Date.now() + tracker.offset < makingAt; } };
 
     function tick() {
       if (!tracker) return;
@@ -589,6 +657,7 @@
       var tkStatus = document.querySelector('#ticket .tk-status');
       if (tkStatus) tkStatus.textContent = stage === 3 ? 'Ready for pickup' : stage === 2 ? 'Being made' : 'Received';
       el.ticket.classList.toggle('ready', stage === 3);
+      if (stage >= 2 && cancel.parentNode) cancel.remove();
 
       if (stage !== tracker.stage) {
         var first = tracker.stage === 0;
@@ -604,6 +673,26 @@
     }
     tick();
     tracker.timer = setInterval(tick, 1000);
+  }
+
+  function cancelOrder() {
+    if (!tracker || !tracker.canCancel()) return;
+    var number = tracker.number;
+    clearInterval(tracker.timer);
+    tracker.card.classList.add('cancelled');
+    tracker.card.querySelector('.tr-eta').textContent = 'Cancelled';
+    tracker.card.querySelector('.tr-note').textContent = 'This order was cancelled. Nothing was charged.';
+    var links = tracker.card.querySelector('.tr-links');
+    if (links) links.remove();
+    var tkStatus = document.querySelector('#ticket .tk-status');
+    if (tkStatus) tkStatus.textContent = 'Cancelled';
+    tracker = null;
+    document.title = baseTitle;
+    BB.Log.add('order_cancelled', { mode: 'button' });
+    respond({
+      text: 'Okay, order ' + number + ' is cancelled and nothing was charged. Would you like to start a new order?',
+      quick: [{ label: 'Start a new order', value: 'Start a new order' }], mood: 'neutral', outcome: 'cancelled', phase: 'done', current: null, transient: true
+    }, { instant: true });
   }
 
   function stopTracker() {
@@ -742,4 +831,14 @@
     el.voiceNote.textContent = 'Voice input isn’t available in this browser, but you can type everything. For voice, open this page in Chrome or Edge.';
   }
   el.mic.disabled = !BB.Speech.canListen();
+
+  // Voice quality: show which voice is used, and fetch the natural voice in the
+  // background when the browser doesn't have a natural one built in.
+  var voiceStatus = $('voiceStatus');
+  BB.Speech.onVoiceStatus(function (st) {
+    if (!voiceStatus) return;
+    voiceStatus.textContent = st.label;
+    voiceStatus.setAttribute('data-state', st.state);
+  });
+  setTimeout(function () { BB.Speech.loadNaturalVoice(); }, 1200);
 })();

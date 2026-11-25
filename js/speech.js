@@ -7,6 +7,14 @@
  *   - SpeechRecognition (Chrome and Edge) for listening
  *   - speechSynthesis (all modern browsers) for speaking
  *
+ * Speaking voice, in order of preference:
+ *   1. A Microsoft "Natural" neural voice (built into Edge): human-sounding, instant.
+ *   2. Kokoro, a free open-source neural voice model that runs inside the page
+ *      (British male voice "George"). It downloads once in the background
+ *      (about 90 MB, then cached by the browser); until it is ready, and if it
+ *      cannot load, the browser's own voice is used.
+ *   3. The browser's built-in voice.
+ *
  * If voice is not available at all, the app hides the mic button and the
  * whole order can still be done by typing (accessibility requirement:
  * "do not rely on voice alone").
@@ -34,8 +42,8 @@ BB.Speech = (function () {
    * then any UK English voice that sounds male, then any UK English voice,
    * and finally any English voice.
    */
-  var VOICE_RATE = 0.95;   // a little slower than normal: calmer and easier to follow
-  var VOICE_PITCH = 0.9;   // slightly lower
+  var VOICE_RATE = 1.0;    // set by the Voice speed control (0.85 / 1.0 / 1.15)
+  var VOICE_PITCH = 1.0;   // changing pitch makes browser voices sound more robotic
 
   function pickVoice() {
     if (!synth) return;
@@ -64,6 +72,126 @@ BB.Speech = (function () {
   if (synth) {
     pickVoice();
     if (typeof synth.onvoiceschanged !== 'undefined') synth.onvoiceschanged = pickVoice;
+  }
+
+  /* ---------- natural neural voice (Kokoro) ---------- */
+  var KOKORO_URL = 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js';
+  var KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
+  var KOKORO_VOICE = 'bm_george';        // British English, male, calm
+  var neural = { state: 'off', tts: null, percent: 0, files: {} };
+  var audioCtx = null;
+  var currentSource = null;
+  var statusListener = null;
+
+  function hasNaturalBrowserVoice() { return !!(chosenVoice && /natural/i.test(chosenVoice.name)); }
+
+  function report() {
+    if (!statusListener) return;
+    var label;
+    if (hasNaturalBrowserVoice()) label = 'Natural voice (' + chosenVoice.name.replace(/^Microsoft\s+/, '').replace(/\s+Online.*$/, '') + ')';
+    else if (neural.state === 'ready') label = 'Natural voice (George)';
+    else if (neural.state === 'loading') label = 'Loading natural voice… ' + neural.percent + '%';
+    else if (chosenVoice) label = 'Standard browser voice';
+    else label = 'Voice not available';
+    statusListener({ state: hasNaturalBrowserVoice() ? 'ready' : neural.state, label: label });
+  }
+
+  /* Start downloading the neural voice, unless the browser already has a natural one. */
+  function loadNaturalVoice() {
+    if (neural.state !== 'off' || hasNaturalBrowserVoice()) { report(); return; }
+    if (typeof window.AudioContext === 'undefined' && typeof window.webkitAudioContext === 'undefined') return;
+    neural.state = 'loading';
+    report();
+    import(KOKORO_URL).then(function (mod) {
+      return mod.KokoroTTS.from_pretrained(KOKORO_MODEL, {
+        dtype: 'q8',
+        device: 'wasm',
+        progress_callback: function (p) {
+          if (!p || !p.file || !p.total) return;
+          neural.files[p.file] = { loaded: p.loaded || 0, total: p.total };
+          var loaded = 0, total = 0;
+          Object.keys(neural.files).forEach(function (f) { loaded += neural.files[f].loaded; total += neural.files[f].total; });
+          var pct = total ? Math.min(99, Math.round(loaded / total * 100)) : 0;
+          if (pct !== neural.percent) { neural.percent = pct; report(); }
+        }
+      });
+    }).then(function (tts) {
+      neural.tts = tts;
+      neural.state = 'ready';
+      report();
+    }).catch(function () {
+      neural.state = 'failed';
+      report();
+    });
+  }
+
+  function useNeural() { return neural.state === 'ready' && !hasNaturalBrowserVoice(); }
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new Ctx();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  /* Text tweaks so the voice reads it naturally. */
+  function forSpeech(text) {
+    return text.replace(/&/g, 'and').replace(/×/g, ' times ').replace(/#(\d+)/g, 'number $1').replace(/\s+/g, ' ').trim();
+  }
+
+  /*
+   * Speak with the neural voice. The first sentence is generated on its own so
+   * BrewBot starts talking quickly; while one part plays, the next one is
+   * already being generated, so there are no gaps between sentences.
+   */
+  function speakNeural(clean, token, finish, onStart) {
+    var ctx = ensureAudio();
+    var sentences = (forSpeech(clean).match(/[^.!?]+[.!?]*/g) || [clean]).map(function (t) { return t.trim(); }).filter(Boolean);
+    var parts = [];
+    sentences.forEach(function (t, i) {
+      var last = parts[parts.length - 1];
+      if (i > 0 && parts.length > 1 && last && (last + ' ' + t).length <= 160) parts[parts.length - 1] = last + ' ' + t;
+      else if (i > 0 && parts.length === 1 && last && last.length < 40) parts[0] = last + ' ' + t;
+      else parts.push(t);
+    });
+    var jobs = [];
+    function job(i) {
+      if (!jobs[i]) {
+        // A slow computer should never leave BrewBot stuck: after 12 seconds, give up on this part.
+        var timeout = new Promise(function (_, reject) { setTimeout(function () { reject(new Error('slow')); }, 12000); });
+        jobs[i] = Promise.race([neural.tts.generate(parts[i], { voice: KOKORO_VOICE, speed: VOICE_RATE }), timeout]);
+      }
+      return jobs[i];
+    }
+    var started = false;
+    function play(i) {
+      if (token !== speakToken) return;
+      if (i >= parts.length) { finish(); return; }
+      job(i).then(function (audio) {
+        if (token !== speakToken) return;
+        if (i + 1 < parts.length) job(i + 1);           // generate the next part while this one plays
+        var data = audio.audio, rate = audio.sampling_rate || 24000;
+        var buffer = ctx.createBuffer(1, data.length, rate);
+        buffer.copyToChannel ? buffer.copyToChannel(data, 0) : buffer.getChannelData(0).set(data);
+        var src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(ctx.destination);
+        src.onended = function () { if (currentSource === src) currentSource = null; play(i + 1); };
+        currentSource = src;
+        if (!started) { started = true; if (onStart) onStart(); }
+        src.start();
+      }).catch(function () {
+        // If the neural voice fails mid-reply, finish with the browser voice.
+        if (token !== speakToken) return;
+        neural.state = 'failed';
+        report();
+        if (!started) { started = true; if (onStart) onStart(); }
+        speakBrowser(parts.slice(i).join(' '), token, finish);
+      });
+    }
+    play(0);
   }
 
   /* "um", "uh", a cough heard as "hmm": not an answer, so keep listening. */
@@ -179,6 +307,17 @@ BB.Speech = (function () {
       if (cb.onEnd) cb.onEnd();
     }
 
+    if (useNeural()) {
+      speaking = true;
+      speakNeural(clean, token, finish, cb.onStart);
+      return;
+    }
+    if (cb.onStart) cb.onStart();
+    speakBrowser(clean, token, finish);
+  }
+
+  /* Speak with the browser's own voice, in as few pieces as possible. */
+  function speakBrowser(clean, token, finish) {
     if (!synth) { finish(); return; }
 
     // Speak in as few pieces as possible. Every separate utterance adds a gap
@@ -213,7 +352,6 @@ BB.Speech = (function () {
       u.onerror = next;
       synth.speak(u);
     }
-    if (cb.onStart) cb.onStart();
     next();
   }
 
@@ -221,6 +359,7 @@ BB.Speech = (function () {
     speakToken++;
     speaking = false;
     if (synth) synth.cancel();
+    if (currentSource) { try { currentSource.stop(); } catch (e) {} currentSource = null; }
   }
 
   return {
@@ -233,6 +372,9 @@ BB.Speech = (function () {
     stopSpeaking: stopSpeaking,
     isSpeaking: function () { return speaking; },
     setRate: function (r) { VOICE_RATE = r; },
+    loadNaturalVoice: loadNaturalVoice,
+    onVoiceStatus: function (fn) { statusListener = fn; report(); },
+    unlockAudio: function () { try { if (neural.state !== 'off') ensureAudio(); } catch (e) {} },
     voiceName: function () { return chosenVoice ? chosenVoice.name : 'none'; }
   };
 })();

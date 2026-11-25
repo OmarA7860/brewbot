@@ -6,7 +6,7 @@ BrewBot is an animated coffee-cup avatar that takes your pickup order by **voice
 It remembers what you've said, asks only for what's missing, shows your drink being built as you go, and
 confirms everything before placing the order. Made for the SOFE4850 UX Project at Ontario Tech University (Fall 2026).
 
-**Live demo:** https://OmarA7860.github.io/brewbot/ &nbsp;(open in **Microsoft Edge** or **Google Chrome** on a computer)
+**Live demo:** https://YOUR-USERNAME.github.io/brewbot/ &nbsp;(open in **Microsoft Edge** or **Google Chrome** on a computer)
 
 ![BrewBot ordering page](docs/screenshots/main.png)
 
@@ -22,9 +22,10 @@ confirms everything before placing the order. Made for the SOFE4850 UX Project a
 | 👀 **Always shows its state** | The avatar's face shows when it is listening, thinking, speaking, confused, paused or done. |
 | ✏️ **Fix anything, anytime** | Say "actually, make it almond milk", click **Edit** on any row, or press **Back**. Nothing forces a restart. |
 | 🔁 **Recovers from mishearing** | Shows exactly what it heard, with **Retry** and **Edit**. Reads spoken names back before saving them. |
-| ✅ **Confirms before ordering** | Reads back the full order and total with tax, and only places it after a clear "yes". |
-| ⏱️ **Order tracker** | Received → Being made → Ready, with a countdown, a soft chime and a spoken "your drink is ready". |
-| 🐢 **Voice speed** | Slower / Normal / Faster, or just say "slow down". Calm British voice where the computer has one. |
+| ✅ **Confirms before ordering** | Reads back the full order and shows it as an easy-to-scan receipt with the total, and only places it after a clear "yes". |
+| ⏱️ **Order tracker** | Received → Being made → Ready, with a countdown, a soft chime and a spoken "your drink is ready". Changed your mind? **Cancel** within the first minute. |
+| 🗣️ **Natural voice** | A human-sounding British voice: Microsoft's built-in neural voice in Edge, or a free neural voice model (Kokoro) that loads in the background in other browsers. |
+| 🐢 **Voice speed** | Slower / Normal / Faster, or just say "slow down". |
 | ♿ **Accessible** | Everything works without voice; every spoken line is also text; keyboard shortcuts; high contrast; reduced motion respected. |
 | 🔒 **Privacy aware** | Only a first name is collected. Phone numbers, emails and card numbers are refused. You pay at the counter. |
 
@@ -95,7 +96,7 @@ css/styles.css        Styling, avatar and drink drawings, animations
 js/menu.js            Menu data: drinks, sizes, milks, extras, prices and the words people use for them
 js/nlu.js             Understanding: finds menu words, numbers, times, names and commands in a message
 js/dialogue.js        Conversation manager: fills the 9 order details, checks answers, builds every reply
-js/speech.js          Voice input and output (browser Web Speech API), voice choice and speed
+js/speech.js          Voice input, natural-sounding voice output, voice choice and speed
 js/preview.js         Live drink preview
 js/log.js             Usability test log (time, errors, retries) with CSV export
 js/app.js             Connects everything to the page: chat, avatar, buttons, order panel, tracker
@@ -147,8 +148,10 @@ Personas, user journey, task flow, conversation flowcharts and wireframes are in
 
 ## Built with
 
-Plain **HTML, CSS and JavaScript**: no frameworks, no build step and no external services.
-Voice uses the browser's built-in **Web Speech API**. The avatar and drink preview are hand-drawn SVG animated with CSS.
+Plain **HTML, CSS and JavaScript**: no frameworks and no build step.
+Voice input uses the browser's built-in **Web Speech API**. Spoken replies use Edge's built-in neural voices, or
+[Kokoro](https://github.com/hexgrad/kokoro) (an open-source text-to-speech model run in the browser with
+`kokoro-js`) where those aren't available, with the browser's own voice as a fallback. The avatar and drink preview are hand-drawn SVG animated with CSS.
 
 ## Team
 
