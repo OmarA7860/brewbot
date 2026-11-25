@@ -6,7 +6,7 @@ BrewBot is an animated coffee-cup avatar that takes your pickup order by **voice
 It remembers what you've said, asks only for what's missing, shows your drink being built as you go, and
 confirms everything before placing the order. Made for the SOFE4850 UX Project at Ontario Tech University (Fall 2026).
 
-**Live demo:** https://YOUR-USERNAME.github.io/brewbot/ &nbsp;(open in **Microsoft Edge** or **Google Chrome** on a computer)
+**Live demo:** https://OmarA7860.github.io/brewbot/ &nbsp;(open in **Microsoft Edge** or **Google Chrome** on a computer)
 
 ![BrewBot ordering page](docs/screenshots/main.png)
 
