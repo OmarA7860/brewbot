@@ -436,7 +436,12 @@ BB.Dialogue = (function () {
       this.pending = null;
       if (r.yes && !this.isUseful(r)) {
         var take = BB.NLU.understand(ps.value, ps.slot, now);
+        take.correction = true;
         return this.afterApply(this.apply(take), take, {});
+      }
+      if (r.no && !this.isUseful(r) && !r.unsupported.length) {
+        if (this.phase === 'confirm') return this.confirm('No problem, I’ll keep it as it is.', { short: true });
+        return this.ask(this.current || this.nextSlot() || 'drink', 'No problem.', { short: true });
       }
     }
 
@@ -494,7 +499,7 @@ BB.Dialogue = (function () {
 
     // Confirmation step
     if (this.phase === 'confirm') {
-      if (this.isUseful(r)) {
+      if (this.isUseful(r) || r.unsupported.length || r.anotherDrink) {
         var res = this.apply(r);
         return this.afterApply(res, r, meta);
       }
@@ -795,6 +800,10 @@ BB.Dialogue = (function () {
         else if (names.length) pieces.push(this.ack() + ' ' + capitalize(joinList(names)) + '.');
         else pieces.push(this.ack());
       }
+      if (r.availability && !r.unsupported.length) {
+        if (pieces.length) pieces[0] = pieces[0].replace(/^(Got it|Great|Perfect|Lovely|Okay|Nice choice|Sure thing)\.\s*/, '');
+        pieces.unshift('Yes, we do!');
+      }
       res.notes.forEach(function (n) { pieces.push(n); });
       if (unsupportedMsg) pieces.push(unsupportedMsg);
       if (oneDrinkNote) pieces.push(oneDrinkNote);
@@ -820,6 +829,20 @@ BB.Dialogue = (function () {
       }
       this.fails++;
       var slot = r.unsupported[0].slot;
+      var item = r.unsupported[0].item;
+      // Offer the closest drink as a one-tap choice, like a barista would.
+      if (item.offer && this.phase !== 'done') {
+        this.offered = this.offered || {};
+        if (this.offered[item.name]) unsupportedMsg = 'Sorry, we still don’t have ' + item.name + '.';
+        this.offered[item.name] = true;
+        this.pending = { type: 'suggest', slot: 'drink', value: item.offer };
+        var yesLabel = 'Yes, ' + item.offerLabel;
+        var rest = this.phase === 'confirm' ? [{ label: 'No, keep my order', value: 'No, keep my order' }]
+          : this.quickFor(this.current || 'drink').slice(0, 4);
+        return this.reply(unsupportedMsg + ' Would you like ' + item.offerLabel + ' instead?', {
+          outcome: 'unsupported', quick: [{ label: yesLabel.charAt(0).toUpperCase() + yesLabel.slice(1), value: 'Yes' }].concat(rest)
+        });
+      }
       if (this.phase === 'confirm') return this.confirm(unsupportedMsg, { outcome: 'unsupported', mood: 'confused' });
       var re = slot === this.current
         ? this.ask(this.current, unsupportedMsg, { outcome: 'unsupported', mood: 'confused', short: true })

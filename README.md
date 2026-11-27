@@ -18,7 +18,7 @@ confirms everything before placing the order. Made for the SOFE4850 UX Project a
 |---|---|
 | 🎙️ **Talk, type or tap** | Press **Talk** (or `Ctrl + M`) and speak, type and press Enter, or tap an option. Mix them freely. |
 | 🧠 **Several details at once** | "Two large iced oat lattes with vanilla" fills five answers in one go. BrewBot only asks for the rest. |
-| 💬 **Talks like a barista** | Understands full sentences ("put Sam as the name", "a shot of vanilla", "935"), answers small talk and price questions, and suggests the most popular choice if you say "surprise me". |
+| 💬 **Talks like a barista** | Understands full sentences ("put Sam as the name", "a shot of vanilla", "935"), answers small talk, price and "do you have…" questions, names any drink it doesn't have and offers the closest one, and suggests the most popular choice if you say "surprise me". |
 | ☕ **Live drink preview** | A cartoon mug builds your drink as you answer: colour, size, steam or ice, milk, whipped cream, syrup and quantity. |
 | 👀 **Always shows its state** | The avatar's face shows when it is listening, thinking, speaking, confused, paused or done. It glows when it actually hears your voice and nods each time it saves an answer. |
 | ✏️ **Fix anything, anytime** | Say "actually, make it almond milk", click **Edit** on any row, or press **Back**. Nothing forces a restart. |
@@ -124,7 +124,7 @@ The conversation logic has no screen or audio code in it, which is what makes it
 ## Tests
 
 ```bash
-node tests/dialogue.test.js        # 69 conversation tests, no browser needed
+node tests/dialogue.test.js        # 77 conversation tests, no browser needed
 
 python -m http.server 8123 &       # then, with Playwright installed:
 python tests/browser_test.py       # runs every test case in a real browser with a simulated microphone

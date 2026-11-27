@@ -67,6 +67,34 @@ BB.NLU = (function () {
     return list;
   })();
 
+  /* Every single word that appears in a menu or "we don't have" phrase. */
+  var KNOWN_WORDS = (function () {
+    var set = {};
+    PHRASES.forEach(function (p) { p.phrase.split(/\s+/).forEach(function (w) { set[w] = true; }); });
+    ('a an the my your one two three four five six seven eight nine ten some any another same usual nice good normal plain simple ' +
+     'just like want get have of and or with me i please that this can could would i\'d i\'ll it is my our big hot iced ice cold ' +
+     'warm medium small large regular extra double single quick tall fancy special fresh new favourite favorite ' +
+     'skinny light sweet sweetened unsweetened strong weak half whole morning afternoon second first last more less make made ' +
+     'do you guys have sell is there them those these what which how much 2 3 4 5 6 7 8 9 10 1').split(' ').forEach(function (w) { set[w] = true; });
+    return set;
+  })();
+  var DRINK_HINTS = {
+    latte: 'we have lattes with vanilla or caramel syrup', lattes: 'we have lattes with vanilla or caramel syrup',
+    tea: 'we have green tea, black tea, earl grey and herbal tea', teas: 'we have green tea, black tea, earl grey and herbal tea',
+    coffee: 'we have lattes, cappuccinos, americanos, mochas and cold brew', cappuccino: 'we have regular cappuccinos',
+    americano: 'we have regular americanos', mocha: 'we have regular mochas', chai: 'we have a chai latte'
+  };
+  function findUnknownDrink(text) {
+    var re = /\b([a-z][a-z']+) (lattes?|teas?|coffee|cappuccino|americano|mocha)\b/g, m;
+    while ((m = re.exec(text))) {
+      if (KNOWN_WORDS[m[1]] || /ing$|ed$/.test(m[1]) && KNOWN_WORDS[m[1].replace(/(ing|ed)$/, '')]) continue;
+      var label = m[1].charAt(0).toUpperCase() + m[1].slice(1) + ' ' + m[2].replace(/s$/, '');
+      return { phrase: m[0], item: { name: /^[aeiou]/i.test(label) ? 'an ' + label : 'a ' + label, hint: DRINK_HINTS[m[2]] || 'we have lattes, cappuccinos, americanos, mochas, cold brew, chai lattes and tea',
+        offer: /latte/.test(m[2]) ? 'latte' : null, offerLabel: /latte/.test(m[2]) ? 'a regular latte' : null } };
+    }
+    return null;
+  }
+
   /* Find every known phrase in the text. Matched words are blanked out. */
   function findPhrases(text) {
     var found = [];
@@ -288,6 +316,8 @@ BB.NLU = (function () {
   /* Phrases that mean something different from their separate words. */
   function rephrase(t) {
     return t
+      // common mishearings of "Spanish latte"
+      .replace(/\bspanish (law|laws|lot|lotte|lottie|lotty|la tay|late|lady|light)\b/g, 'spanish latte')
       // "a shot / pump / splash of vanilla" is syrup, not an extra espresso shot
       .replace(/\b(?:an? |one |two |a couple of |some )?(?:shots?|pumps?|splash(?:es)?|dash(?:es)?|squirts?) of (vanilla|caramel)(?: syrup)?\b/g, ' $1 syrup ')
       // "a shot of espresso" is an extra shot
@@ -325,6 +355,14 @@ BB.NLU = (function () {
     if (currentSlot === 'pickup' || looksLikeTime || bareClock) {
       var time = parseTime(text, now);
       if (!time.error || currentSlot === 'pickup' || ((looksLikeTime || bareClock) && time.error !== 'unclear')) result.time = time;
+    }
+
+    // Drinks we've never heard of ("pistachio rose latte", "Amazon latte"):
+    // say we don't have them instead of quietly ordering a plain latte.
+    var generic = (currentSlot === 'pickup' || currentSlot === 'name' || currentSlot === 'quantity') && !/\b(do|does) (you|u)\b/.test(text) ? null : findUnknownDrink(text);
+    if (generic) {
+      result.unsupported.push({ slot: 'drink', item: generic.item });
+      text = text.replace(generic.phrase, ' ');
     }
 
     // Menu words
@@ -371,7 +409,20 @@ BB.NLU = (function () {
       : /^\s*(hi|hey|hello|hiya|good (morning|afternoon|evening))\s*(there|brewbot|bot)?\s*$/.test(text) ? 'hello'
       : /^\s*(thanks|thank you|thx|cheers|ty)\b/.test(text) && !Object.keys(result.values).length ? 'thanks' : null;
     result.priceQuestion = /\b(how much|price|prices|cost|costs|expensive|cheap|cheapest|difference between|what's the difference|whats the difference)\b/.test(text);
-    result.recommend = /\b(recommend|recommendation|suggest|suggestion|surprise me|what'?s (good|popular|best)|whats (good|popular|best)|most popular|what do (people|most people) (get|order)|your favou?rite|you pick|you choose|dealer'?s choice|up to you|i don'?t know|not sure|dunno)\b/.test(text);
+    result.recommend = /\b(recommend|recommendation|suggest|suggestion|surprise me|what'?s (good|popular|best)|whats (good|popular|best)|most popular|what do (people|most people) (get|order)|your favou?rite|you pick|you choose|dealer'?s choice|up to you|(i )?don'?t (really )?know|not (really )?sure|no idea|can'?t decide|dunno|whatever you (think|recommend))\b/.test(text);
+
+    // "Do you have ...?" questions
+    var avail = text.match(/\b(?:do|does|d'?) ?(?:you|u|ya|y'all)(?: guys| all)? (?:have|sell|make|serve|do|got|carry)\s+(?:an? |any |some |the )?([a-z' ]{2,40}?)\s*$/);
+    if (avail) {
+      result.availability = true;
+      var known = Object.keys(result.values).length || result.extras.length;
+      if (!known && !result.unsupported.length && !result.conflicts.drink) {
+        var thing = avail[1].trim().replace(/\b(here|today|right now|please|guys)\b/g, '').trim();
+        if (thing && thing.split(' ').length <= 4) {
+          result.unsupported.push({ slot: 'drink', item: { name: thing.length <= 3 ? thing.toUpperCase() : thing, hint: 'we make lattes, cappuccinos, americanos, mochas, cold brew, chai lattes and tea' } });
+        }
+      }
+    }
 
     // A name given while answering something else ("put Sam as the name")
     if (currentSlot !== 'name' && /\b(my name is|my name's|my first name is|as the (first )?name|as my (first )?name|for the name|under the name|name it|call me|the name is|the name's)\b/.test(text)) {

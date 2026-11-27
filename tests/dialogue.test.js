@@ -348,9 +348,50 @@ run('P1: asking for another drink explains one kind per order', TO_NAME.concat([
   expect(/one kind of drink per order/.test(r.text), 'explains the limit', p);
   return p;
 });
-run('P1: a question at the final summary stays on the summary', TO_NAME.concat(['Sam', 'Card', V('Do you guys have an iced Spanish latte?')]), function (d, r) {
+run('P1: a question at the final summary offers the closest drink and stays on the summary', TO_NAME.concat(['Sam', 'Card', V('Do you guys have an iced Spanish latte?')]), function (d, r) {
   var p = [];
-  expect(d.phase === 'confirm' && /Spanish latte/.test(r.text) && /Should I place the order/.test(r.text), 'answers and keeps the summary, got: ' + r.text, p);
+  expect(d.phase === 'confirm' && /don’t have a Spanish latte/.test(r.text) && /instead\?/.test(r.text), 'answers with an offer, got: ' + r.text, p);
+  expect(r.quick.some(function (q) { return /keep my order/.test(q.label); }), 'offers to keep the order', p);
+  return p;
+});
+run('Saying no to the offer keeps the order as it is', TO_NAME.concat(['Sam', 'Card', 'Do you have a Spanish latte?', 'No, keep my order']), function (d, r) {
+  var p = [];
+  expect(d.phase === 'confirm' && /keep it as it is/.test(r.text) && /Should I place the order/.test(r.text), 'back to the summary, got: ' + r.text, p);
+  return p;
+});
+run('Unavailable drink: closest one can be accepted with "yes"', ['Spanish latte', 'yes'], function (d, r) {
+  var p = [];
+  expect(d.order.drink === 'latte' && JSON.stringify(d.order.extras) === '["caramel"]', 'latte with caramel, got ' + JSON.stringify(d.order), p);
+  return p;
+});
+run('Any unknown drink is named, not silently changed to a plain latte', ['Amazon latte'], function (d, r) {
+  var p = [];
+  expect(/don’t have an Amazon latte/.test(r.text) && !d.order.drink, 'names the unknown drink, got: ' + r.text, p);
+  return p;
+});
+run('"Spanish law" (misheard) is understood as Spanish latte', [V('Do you have a Spanish law?')], function (d, r) {
+  var p = [];
+  expect(/Spanish latte/.test(r.text), 'recognised, got: ' + r.text, p);
+  return p;
+});
+run('Asking for it again gets a shorter reply', ['Spanish latte', 'Spanish latte'], function (d, r) {
+  var p = [];
+  expect(/still don’t have a Spanish latte/.test(r.text), 'shorter second reply, got: ' + r.text, p);
+  return p;
+});
+run('"Do you have oat milk?" says yes and adds it', ['Latte', 'Large', 'Hot', 'Do you have oat milk?'], function (d, r) {
+  var p = [];
+  expect(/^Yes, we do!/.test(r.text) && d.order.milk === 'oat', 'yes + oat, got: ' + r.text, p);
+  return p;
+});
+run('Decaf is explained with a caffeine-free option', ['decaf latte'], function (d, r) {
+  var p = [];
+  expect(/don’t have decaf/.test(r.text) && /herbal tea/.test(r.text), 'explains decaf, got: ' + r.text, p);
+  return p;
+});
+run('"I don\'t really know what milk I want" gets a suggestion', ['Latte', 'Large', 'Hot', V("I don't really know what milk I want.")], function (d, r) {
+  var p = [];
+  expect(r.outcome === 'suggest', 'suggests, got: ' + r.text, p);
   return p;
 });
 run('P1: something unclear at the summary does not jump back to the drink question', TO_NAME.concat(['Sam', 'Card', V('mumble mumble')]), function (d, r) {
