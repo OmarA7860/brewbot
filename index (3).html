@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bean &amp; Brew | Order with BrewBot</title>
+  <meta name="description" content="Order a pickup drink from Bean & Brew by talking or typing to BrewBot, our ordering assistant.">
+  <link rel="stylesheet" href="css/styles.css?v=20261127">
+</head>
+<body>
+  <!--
+    Bean & Brew ordering page with the BrewBot avatar.
+    SOFE4850 UX Project, Fall 2026. Target platform: DESKTOP browser (Chrome or Edge).
+    Layout: avatar panel (left) | conversation (middle) | live order panel (right)
+  -->
+  <a class="skip-link" href="#textInput">Skip to the answer box</a>
+
+  <header class="site-header">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <ellipse cx="20" cy="20" rx="13" ry="17" transform="rotate(30 20 20)" fill="#5a3825"/>
+        <path d="M14 8 C 24 16, 16 24, 26 32" stroke="#f4e7d8" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-name">Bean &amp; Brew</span>
+    </div>
+    <nav class="site-nav" aria-label="Main">
+      <button type="button" class="nav-link" aria-current="page" id="navOrder">Order ahead</button>
+      <button type="button" class="nav-link" id="navMenu" aria-haspopup="dialog">Menu</button>
+      <button type="button" class="nav-link" id="navFind" aria-haspopup="dialog">Find us</button>
+    </nav>
+    <p class="hours">Open today 7 am to 9 pm &middot; Campus pickup counter</p>
+  </header>
+
+  <main class="layout">
+    <!-- ============ LEFT: the avatar ============ -->
+    <section class="avatar-panel" aria-labelledby="botName">
+      <div class="avatar" id="avatar" data-state="idle" data-mood="neutral" aria-hidden="true">
+        <svg viewBox="0 0 220 220" class="avatar-svg">
+          <!-- listening rings -->
+          <g class="rings">
+            <circle cx="110" cy="128" r="76"/>
+            <circle cx="110" cy="128" r="76"/>
+            <circle cx="110" cy="128" r="76"/>
+          </g>
+          <!-- steam -->
+          <g class="steam" fill="none" stroke-linecap="round">
+            <path class="s1" d="M86 62 c -8 -10, 8 -16, 0 -28"/>
+            <path class="s2" d="M110 58 c -8 -10, 8 -16, 0 -30"/>
+            <path class="s3" d="M134 62 c -8 -10, 8 -16, 0 -28"/>
+          </g>
+          <!-- saucer -->
+          <ellipse class="saucer" cx="110" cy="190" rx="78" ry="13"/>
+          <!-- handle -->
+          <path class="handle" d="M165 104 c 30 -4, 34 42, 2 52" fill="none" stroke-width="13" stroke-linecap="round"/>
+          <!-- cup -->
+          <path class="cup" d="M50 80 h 120 l -9 86 c -2 14 -12 22 -26 22 h -50 c -14 0 -24 -8 -26 -22 z"/>
+          <path class="cup-rim" d="M46 76 h 128 a 4 4 0 0 1 4 4 v 2 a 4 4 0 0 1 -4 4 h -128 a 4 4 0 0 1 -4 -4 v -2 a 4 4 0 0 1 4 -4 z"/>
+          <rect class="band" x="54" y="150" width="112" height="12" rx="2"/>
+          <!-- face -->
+          <g class="face">
+            <g class="brows">
+              <path class="brow-l" d="M78 104 q 9 -6 18 0" fill="none" stroke-width="4" stroke-linecap="round"/>
+              <path class="brow-r" d="M124 104 q 9 -6 18 0" fill="none" stroke-width="4" stroke-linecap="round"/>
+            </g>
+            <g class="eyes-open">
+              <ellipse class="eye" cx="87" cy="118" rx="7" ry="9"/>
+              <ellipse class="eye" cx="133" cy="118" rx="7" ry="9"/>
+              <circle class="glint" cx="89.5" cy="114.5" r="2.4"/>
+              <circle class="glint" cx="135.5" cy="114.5" r="2.4"/>
+            </g>
+            <g class="eyes-closed" fill="none" stroke-width="4" stroke-linecap="round">
+              <path d="M79 119 q 8 6 16 0"/>
+              <path d="M125 119 q 8 6 16 0"/>
+            </g>
+            <ellipse class="cheek" cx="72" cy="134" rx="8" ry="5"/>
+            <ellipse class="cheek" cx="148" cy="134" rx="8" ry="5"/>
+            <path class="mouth mouth-smile" d="M98 136 q 12 10 24 0" fill="none" stroke-width="4.5" stroke-linecap="round"/>
+            <path class="mouth mouth-happy" d="M94 132 q 16 22 32 0 z"/>
+            <ellipse class="mouth mouth-talk" cx="110" cy="139" rx="9" ry="6"/>
+            <ellipse class="mouth mouth-o" cx="110" cy="140" rx="5" ry="5.5"/>
+            <path class="mouth mouth-flat" d="M101 139 h 18" fill="none" stroke-width="4.5" stroke-linecap="round"/>
+          </g>
+          <!-- thinking dots -->
+          <g class="think-dots">
+            <circle cx="168" cy="54" r="5"/><circle cx="184" cy="42" r="6.5"/><circle cx="202" cy="28" r="8"/>
+          </g>
+          <!-- paused z -->
+          <text class="zzz" x="160" y="62">z z</text>
+        </svg>
+      </div>
+
+      <div class="status" id="status" role="status" aria-live="polite">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="statusText">Ready when you are</span>
+      </div>
+
+      <h1 id="botName" class="bot-name">BrewBot</h1>
+      <p class="bot-role">Bean &amp; Brew&rsquo;s ordering assistant. I take pickup orders by voice or text.</p>
+
+      <div class="controls" role="group" aria-label="Conversation controls">
+        <button type="button" class="ctrl" id="repeatBtn" title="Hear the last question again">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.6-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.6 5.7L4 15.5M4 20v-4.5h4.5"/></svg>
+          Repeat
+        </button>
+        <button type="button" class="ctrl" id="backBtn" title="Go back to the previous question">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+          Back
+        </button>
+        <button type="button" class="ctrl" id="pauseBtn" title="Pause the conversation">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-pause"><path d="M9 5v14M15 5v14"/></svg>
+          <span>Pause</span>
+        </button>
+        <button type="button" class="ctrl" id="muteBtn" aria-pressed="false" title="Turn BrewBot&rsquo;s voice on or off">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="cross" d="M16 9l6 6M22 9l-6 6"/></svg>
+          <span>Voice on</span>
+        </button>
+        <button type="button" class="ctrl ctrl-wide" id="restartCtrl" title="Clear this order and start again">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>
+          Start over
+        </button>
+      </div>
+
+      <div class="speed" role="group" aria-labelledby="speedLabel">
+        <span id="speedLabel" class="speed-label">Voice speed</span>
+        <div class="seg">
+          <button type="button" data-speed="slower" aria-pressed="false">Slower</button>
+          <button type="button" data-speed="normal" aria-pressed="true">Normal</button>
+          <button type="button" data-speed="faster" aria-pressed="false">Faster</button>
+        </div>
+        <p class="voice-status" id="voiceStatus" aria-live="polite" hidden></p>
+      </div>
+
+      <div class="try-saying">
+        <h2>Things you can say</h2>
+        <ul>
+          <li>&ldquo;Two large iced oat lattes&rdquo;</li>
+          <li>&ldquo;Actually, make it almond milk&rdquo;</li>
+          <li>&ldquo;Go back&rdquo; or &ldquo;Slow down&rdquo;</li>
+          <li>&ldquo;What are my options?&rdquo;</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ MIDDLE: the conversation ============ -->
+    <section class="chat-panel" aria-label="Conversation with BrewBot">
+      <div class="welcome" id="welcome">
+        <p class="eyebrow">Order ahead, skip the line</p>
+        <h2>Your drink, ready when you get here.</h2>
+        <p>BrewBot will ask a few quick questions and have your order in about a minute. You can talk with the mic button or type your answers, whichever you like.</p>
+        <button type="button" class="btn-primary" id="startBtn">Start my order</button>
+        <p class="lineup-label">Or start with a favourite</p>
+        <div class="lineup" id="lineup"></div>
+        <p class="fine" id="voiceNote">Voice works best in Chrome or Edge. Your browser will ask to use your microphone the first time you press the mic.</p>
+      </div>
+
+      <div class="chat-log" id="chatLog" role="log" aria-live="polite" aria-label="Conversation" hidden></div>
+
+      <div class="paused" id="pausedBanner" hidden>
+        <span><strong>Paused.</strong> Take your time. Your order is saved.</span>
+        <button type="button" class="btn-small" id="resumeBtn">Resume</button>
+      </div>
+
+      <div class="quick-replies" id="quickReplies" aria-label="Suggested answers"></div>
+
+      <form class="input-bar" id="inputForm" autocomplete="off" hidden>
+        <button type="button" class="mic-btn" id="micBtn" aria-label="Press to talk" title="Press to talk (Ctrl + M)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7"/></svg>
+          <span class="mic-label">Talk</span>
+        </button>
+        <div class="input-wrap">
+          <label for="textInput" class="visually-hidden">Type your answer</label>
+          <input type="text" id="textInput" placeholder="Type your answer here" maxlength="200">
+          <div class="interim" id="interim" aria-hidden="true"></div>
+        </div>
+        <button type="submit" class="send-btn" id="sendBtn">Send</button>
+      </form>
+      <p class="input-hint" id="inputHint" hidden>Press <kbd>Talk</kbd> (or <kbd>Ctrl</kbd> + <kbd>M</kbd>) and speak, or type and press <kbd>Enter</kbd>.</p>
+    </section>
+
+    <!-- ============ RIGHT: the order so far ============ -->
+    <aside class="order-panel" aria-labelledby="orderTitle">
+      <h2 id="orderTitle">Your order</h2>
+      <p class="order-sub" id="orderSub">Your choices show up here as you go.</p>
+
+      <!-- Live drink preview: built by js/preview.js as the order fills in -->
+      <div class="preview-card">
+        <svg id="pvSvg" class="pv" viewBox="0 0 220 236" role="img" aria-label="Drink preview: your drink will appear here">
+          <defs>
+            <clipPath id="pvClip"><path d="M54 53 L65.5 204 Q67 210.5 73 210.5 L147 210.5 Q153 210.5 154.5 204 L166 53 Z"/></clipPath>
+          </defs>
+          <circle class="pv-glow" cx="110" cy="122" r="104"/>
+          <ellipse class="pv-coaster" cx="110" cy="221" rx="80" ry="11"/>
+          <g id="pvCup" class="pv-cup">
+            <g id="pvSteam" class="pv-steam">
+              <path d="M84 40 c -9 -10 9 -17 0 -30"/><path d="M110 36 c -9 -10 9 -17 0 -32"/><path d="M136 40 c -9 -10 9 -17 0 -30"/>
+            </g>
+            <path class="pv-glass-back" d="M50 50 L62 205 Q63.5 214 72 214 L148 214 Q156.5 214 158 205 L170 50 Z"/>
+            <g id="pvStraw" class="pv-straw">
+              <g transform="rotate(14 124 110)">
+                <rect x="118" y="-4" width="13" height="150" rx="4" class="straw-body"/>
+                <rect x="118" y="8" width="13" height="10" class="straw-stripe"/>
+                <rect x="118" y="30" width="13" height="10" class="straw-stripe"/>
+                <rect x="118" y="52" width="13" height="10" class="straw-stripe"/>
+              </g>
+            </g>
+            <g clip-path="url(#pvClip)">
+              <g id="pvLiquid" class="pv-liquid">
+                <rect id="pvCoffee" x="40" y="64" width="140" height="160"/>
+                <path id="pvShot" class="pv-part" d="M40 184 C70 176 90 192 110 184 C130 176 150 192 180 184 V224 H40Z"/>
+                <path id="pvMilkLayer" class="pv-part" d="M40 64 H180 V124 C160 132 140 116 110 124 C85 131 60 116 40 124 Z"/>
+                <path id="pvSwirl" class="pv-part" d="M72 152 C 92 140 118 168 148 150"/>
+                <path id="pvFoam" class="pv-part pv-foam" d="M40 64 H180 V78 C160 85 140 73 110 80 C85 86 60 73 40 80 Z"/>
+                <ellipse id="pvSurface" cx="110" cy="64" rx="58" ry="5"/>
+                <g id="pvSpice" class="pv-part"><circle cx="86" cy="70" r="2"/><circle cx="104" cy="67" r="2"/><circle cx="121" cy="72" r="2"/><circle cx="137" cy="68" r="2"/><circle cx="96" cy="75" r="1.6"/><circle cx="129" cy="76" r="1.6"/></g>
+              </g>
+              <g id="pvIce" class="pv-ice">
+                <g class="cube"><g transform="rotate(-12 83 86)"><rect x="68" y="71" width="30" height="30" rx="7"/><path d="M74 78 l8 0"/></g></g>
+                <g class="cube"><g transform="rotate(10 122 82)"><rect x="107" y="67" width="30" height="30" rx="7"/><path d="M113 74 l8 0"/></g></g>
+                <g class="cube"><g transform="rotate(-4 102 112)"><rect x="87" y="97" width="30" height="30" rx="7"/><path d="M93 104 l8 0"/></g></g>
+              </g>
+            </g>
+            <path class="pv-handle" d="M166 86 C 204 84 206 152 160 158"/>
+            <path class="pv-handle-inner" d="M166 86 C 204 84 206 152 160 158"/>
+            <path id="pvOutline" class="pv-outline" d="M50 50 L62 205 Q63.5 214 72 214 L148 214 Q156.5 214 158 205 L170 50 Z"/>
+            <path class="pv-shine" d="M66 72 L75 186"/>
+            <g id="pvDrops" class="pv-drops"><ellipse cx="58" cy="122" rx="3" ry="4.5"/><ellipse cx="160" cy="98" rx="3" ry="4.5"/><ellipse cx="154" cy="160" rx="2.6" ry="4"/><ellipse cx="64" cy="170" rx="2.4" ry="3.6"/></g>
+            <g id="pvWhip" class="pv-whip">
+              <path class="whip-body" d="M54 56 C 46 38 66 26 80 34 C 82 16 106 10 116 24 C 126 10 154 16 152 36 C 168 36 172 56 162 58 Z"/>
+              <path class="whip-line" d="M100 22 C 104 8 124 10 118 24 M70 46 C 84 40 96 48 110 42 M118 44 C 132 38 144 46 156 44"/>
+            </g>
+            <path id="pvDrizzleA" class="pv-drizzle" d="M66 70 L80 62 L94 72 L108 62 L122 72 L136 62 L152 70"/>
+            <path id="pvDrizzleB" class="pv-drizzle" d="M70 78 L84 70 L98 80 L112 70 L126 80 L140 70 L150 76"/>
+            <g id="pvEmpty" class="pv-empty"><text x="110" y="152" text-anchor="middle">?</text></g>
+          </g>
+          <g id="pvBadge" class="pv-badge"><circle cx="188" cy="40" r="21"/><text id="pvBadgeText" x="188" y="47" text-anchor="middle">&#215;2</text></g>
+        </svg>
+        <div class="pv-caption" aria-hidden="true">
+          <p id="pvTitle" class="pv-title">Your drink will appear here</p>
+          <p id="pvDetails" class="pv-details" hidden></p>
+          <p id="pvTodo" class="pv-todo" hidden></p>
+        </div>
+      </div>
+      <ul class="order-list" id="orderList"></ul>
+      <div class="totals" id="totals" hidden></div>
+      <div class="ticket" id="ticket" hidden></div>
+      <div class="privacy">
+        <h3>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          What we collect
+        </h3>
+        <p>Only your drink choices, a pickup time and a first name. We never ask for a phone number, address or card details. You pay at the counter.</p>
+      </div>
+      <button type="button" class="link-btn" id="restartBtn">Start over</button>
+    </aside>
+  </main>
+
+  <footer class="site-footer">
+    <p>Bean &amp; Brew is a made-up coffee shop for a SOFE4850 UX course project. Designed for desktop browsers (Chrome or Edge). No real orders are placed.</p>
+    <button type="button" class="link-btn" id="logBtn">Test log</button>
+  </footer>
+
+  <!-- Menu and Find us panels (opened from the header) -->
+  <div class="modal-backdrop" id="modalBackdrop" hidden></div>
+  <div class="modal" id="menuModal" role="dialog" aria-modal="true" aria-labelledby="menuTitle" hidden>
+    <div class="modal-head"><h2 id="menuTitle">Our menu</h2><button type="button" class="btn-small modal-close">Close</button></div>
+    <div id="menuBody"></div>
+    <p class="fine">Prices are for a small (12 oz). Medium (16 oz) adds $0.60 and large (20 oz) adds $1.10. Sugar and sweetener are free at the self-serve counter. Prices before 13% HST.</p>
+  </div>
+  <div class="modal" id="findModal" role="dialog" aria-modal="true" aria-labelledby="findTitle" hidden>
+    <div class="modal-head"><h2 id="findTitle">Find us</h2><button type="button" class="btn-small modal-close">Close</button></div>
+    <dl class="find-list">
+      <dt>Where</dt><dd>Campus pickup counter, ground floor of the main library, next to the north entrance.</dd>
+      <dt>Hours</dt><dd>Every day, 7 am to 9 pm. Orders are ready about 10 minutes after you place them.</dd>
+      <dt>Picking up</dt><dd>Look for your first name on the cup, or show your order number at the counter.</dd>
+      <dt>Paying</dt><dd>Card or cash at the counter when you pick up. Nothing is charged online.</dd>
+    </dl>
+    <p class="fine">Bean &amp; Brew is a made-up shop for a SOFE4850 course project, so there is no real location.</p>
+  </div>
+
+  <!-- Usability testing log (for the facilitator, not the participant) -->
+  <div class="log-drawer" id="logDrawer" hidden role="dialog" aria-labelledby="logTitle">
+    <div class="log-head">
+      <h2 id="logTitle">Usability test log</h2>
+      <button type="button" class="btn-small" id="logClose" aria-label="Close test log">Close</button>
+    </div>
+    <label class="log-participant">Participant <input type="text" id="participantInput" placeholder="e.g. P1"></label>
+    <dl class="log-summary" id="logSummary"></dl>
+    <div class="log-actions">
+      <button type="button" class="btn-small" id="logDownload">Download CSV</button>
+      <button type="button" class="btn-small ghost" id="logClear">Clear log</button>
+    </div>
+    <ol class="log-events" id="logEvents"></ol>
+  </div>
+
+  <script src="js/menu.js?v=20261127"></script>
+  <script src="js/nlu.js?v=20261127"></script>
+  <script src="js/dialogue.js?v=20261127"></script>
+  <script src="js/speech.js?v=20261127"></script>
+  <script src="js/log.js?v=20261127"></script>
+  <script src="js/drinkart.js?v=20261127"></script>
+  <script src="js/preview.js?v=20261127"></script>
+  <script src="js/app.js?v=20261127"></script>
+</body>
+</html>
