@@ -101,6 +101,7 @@ BB.Dialogue = (function () {
     this.lastReply = null;
     this.nudged = false;
     this.placed = null;       // { number, ready } once the order is placed
+    this.nextOrder = null;    // a second, different drink to order right after this one
     this.ackIndex = 0;
   };
 
@@ -302,8 +303,22 @@ BB.Dialogue = (function () {
     var text = 'You’re all set, ' + this.order.name + '! Your order number is ' + number + '. ' +
       'Your ' + this.describeDrink().replace(/^an? /, '') + ' will be ready around ' + formatTime(ready) +
       ' at the pickup counter. Thanks for ordering with Bean & Brew!';
+    if (this.nextOrder) {
+      text += ' Ready to order ' + this.nextOrder.label + ' now?';
+      var lbl = 'Yes, order ' + this.nextOrder.label.replace(/^your /, 'the ');
+      return this.reply(text, { mood: 'happy', outcome: 'completed', quick: [{ label: lbl, value: 'Yes, next order' }, { label: 'No thanks', value: 'No thanks' }] });
+    }
     return this.reply(text, { mood: 'happy', outcome: 'completed', quick: [{ label: 'Start a new order', value: 'Start a new order' }] });
   };
+
+  function describeNext(r) {
+    var v = r.values, words = [];
+    if (v.size) words.push(BB.option('size', v.size).label.toLowerCase());
+    if (v.temp === 'iced' && v.drink !== 'coldbrew') words.push('iced');
+    words.push(BB.option('drink', v.drink).label.toLowerCase());
+    var s = words.join(' ');
+    return 'your ' + s;
+  }
 
   /* ---------- public actions ---------- */
 
@@ -400,10 +415,46 @@ BB.Dialogue = (function () {
    *   meta.alternatives  other guesses from speech recognition
    *   meta.confidence    0..1 from speech recognition (0 = unknown)
    */
+  /*
+   * "…and then I also want a large mocha" while ordering a cappuccino.
+   * Each order holds one kind of drink, so the second drink is saved as the
+   * next order instead of silently replacing the first one (error prevention).
+   * Returns { now: text for this order, next: text for the next order } or null.
+   */
+  var CUE_RE = /\b(and then|then|and also|also|plus|as well as|in addition|and another|another|and a second|a second|and an?)\b/gi;
+  var CHANGE_WORDS = /\b(actually|instead|change|switch|make it|make that|rather|no wait|scratch that)\b/i;
+  Dialogue.prototype.splitSecondDrink = function (raw) {
+    if (this.phase !== 'asking' || CHANGE_WORDS.test(raw)) return null;
+    var now = this.now(), m, self = this;
+    CUE_RE.lastIndex = 0;
+    while ((m = CUE_RE.exec(raw))) {
+      var before = raw.slice(0, m.index), after = raw.slice(m.index);
+      var second = BB.NLU.understand(after, 'drink', now).values.drink;
+      if (!second) continue;
+      var first = this.order.drink || BB.NLU.understand(before, this.current, now).values.drink;
+      if (first && first !== second) return { now: before, next: after.replace(CUE_RE, ' ').trim() };
+    }
+    return null;
+  };
+
   Dialogue.prototype.handle = function (text, meta) {
     meta = meta || {};
     var raw = String(text || '').trim();
     if (!raw) return this.ask(this.current || 'drink', 'I didn’t get an answer there.', { outcome: 'empty', short: true });
+
+    var split = this.splitSecondDrink(raw);
+    if (split) {
+      var nextInfo = BB.NLU.understand(split.next, 'drink', this.now());
+      var nextOrder = { text: split.next, label: describeNext(nextInfo) };
+      var keep = BB.NLU.understand(split.now, this.current, this.now());
+      var reply = this.isUseful(keep) ? this.handle(split.now, meta) : null;
+      this.nextOrder = nextOrder;
+      var note = 'I can take one kind of drink per order, so I’ll start ' + nextOrder.label + ' as a second order as soon as this one is placed.';
+      if (!reply) return this.ask(this.current || this.nextSlot() || 'drink', 'Got it. ' + note, { outcome: 'ok', short: true });
+      reply.text = note + ' ' + reply.text;
+      if (reply.spoken) reply.spoken = note + ' ' + reply.spoken;
+      return reply;
+    }
 
     var now = this.now();
     var r = BB.NLU.understand(raw, this.current, now);
@@ -419,6 +470,28 @@ BB.Dialogue = (function () {
 
     // After the order is placed
     if (this.phase === 'done' && r.command !== 'slower' && r.command !== 'faster') {
+      if (this.nextOrder && (r.yes || /\b(next|second|another|new)\b/.test(r.text) || r.values.drink) && !r.no) {
+        var nx = this.nextOrder, prevNumber = this.placed ? this.placed.number : null;
+        var keepName = this.order.name, keepPay = this.order.payment;
+        this.start();
+        this.nextOrder = null;
+        // Same customer: keep their name and payment so they aren't asked twice (efficiency).
+        if (keepName) { this.order.name = keepName; this.history.push('name'); }
+        if (keepPay) { this.order.payment = keepPay; this.history.push('payment'); }
+        var first = this.handle(nx.text, { mode: 'text' });
+        first.text = first.text.replace(/^(Okay|Got it|Great|Perfect|Lovely|Sure thing|Nice choice)\.\s*/, '');
+        if (first.spoken) first.spoken = first.spoken.replace(/^(Okay|Got it|Great|Perfect|Lovely|Sure thing|Nice choice)\.\s*/, '');
+        var lead = 'Starting ' + nx.label + '.' + (prevNumber ? ' Your first order, number ' + prevNumber + ', is still on its way.' : '') +
+          (keepName ? ' I’ve kept the name ' + keepName + ' and ' + (keepPay === 'card' ? 'card' : 'cash') + ' payment.' : '');
+        first.text = lead + ' ' + first.text;
+        if (first.spoken) first.spoken = lead + ' ' + first.spoken;
+        first.outcome = 'restart';
+        return first;
+      }
+      if (this.nextOrder && r.no) {
+        this.nextOrder = null;
+        return this.reply('No problem. Enjoy your drink!', { quick: [{ label: 'Start a new order', value: 'Start a new order' }] });
+      }
       if (r.command === 'restart' || /\b(new|another|again|start)\b/.test(r.text) || r.yes) return this.start();
       return this.reply('Your order is already in. If you’d like another one, just say "new order".', { quick: [{ label: 'Start a new order', value: 'Start a new order' }] });
     }

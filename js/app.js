@@ -88,6 +88,8 @@
   function scrollDown() { el.chatLog.scrollTop = el.chatLog.scrollHeight; }
 
   function addBotMessage(reply) {
+    // Only the newest message's buttons work, so an old receipt can't be pressed by mistake.
+    Array.prototype.forEach.call(el.chatLog.querySelectorAll('.receipt button, .heard-check button'), function (b) { b.disabled = true; });
     var wrap = document.createElement('div');
     wrap.className = 'msg bot' + (reply.mood && reply.mood !== 'neutral' ? ' ' + reply.mood : '');
     wrap.innerHTML = '<div class="mini">' + CUP_ICON + '</div>';
@@ -283,7 +285,9 @@
     setState('thinking');
 
     // The final summary gets a receipt card with its own buttons, so the quick replies are not repeated.
+    // Reminders and "didn't catch that" replies don't repeat the whole receipt; they show its two buttons instead.
     reply.showReceipt = reply.phase === 'confirm' && dialogue.phase === 'confirm' &&
+      ['nudge', 'not_understood', 'smalltalk', 'info'].indexOf(reply.outcome) === -1 &&
       (reply.quick || []).some(function (q) { return q.value === 'Yes, place my order'; });
 
     ui.replyTimer = setTimeout(function () {

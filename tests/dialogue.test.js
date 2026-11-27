@@ -475,6 +475,32 @@ run('P1-2: "iced coffee" points to the closest iced drinks', ['iced coffee with 
   return p;
 });
 
+// ---------- Two different drinks ----------
+run('A second drink is saved for the next order, not swapped in', ['Cappuccino', 'small', 'iced', 'whole', V('Yeah, put whipped cream and umm, give me one of this drink and then I also want a mocha sized large.')], function (d, r) {
+  var p = [];
+  expect(d.order.drink === 'cappuccino' && d.order.size === 'small', 'cappuccino kept, got ' + d.order.drink + ' ' + d.order.size, p);
+  expect(JSON.stringify(d.order.extras) === '["whip"]', 'whipped cream added, got ' + JSON.stringify(d.order.extras), p);
+  expect(/large mocha as a second order/.test(r.text), 'explains the second order, got: ' + r.text, p);
+  return p;
+});
+run('After placing, the saved drink is offered and keeps name and payment', ['Cappuccino', 'small', 'iced', 'whole', 'whipped cream and then I also want a mocha sized large', '1', 'as soon as possible', 'Sam', 'card', 'yes', 'yes'], function (d, r) {
+  var p = [];
+  expect(d.order.drink === 'mocha' && d.order.size === 'large', 'mocha started, got ' + d.order.drink, p);
+  expect(d.order.name === 'Sam' && d.order.payment === 'card', 'name and payment kept', p);
+  expect(/still on its way/.test(r.text), 'mentions the first order', p);
+  return p;
+});
+run('"Two large iced oat lattes and a mocha" orders the lattes first', ['two large iced oat lattes and a mocha'], function (d, r) {
+  var p = [];
+  expect(d.order.drink === 'latte' && d.order.quantity === 2 && /mocha as a second order/.test(r.text), 'lattes now, mocha next', p);
+  return p;
+});
+run('"Actually make it a mocha" is still a correction', ['latte', 'actually make it a mocha'], function (d, r) {
+  var p = [];
+  expect(d.order.drink === 'mocha' && !d.nextOrder, 'drink changed, nothing saved', p);
+  return p;
+});
+
 // Pronunciation: the spoken copy says "mic" as a word, money and times naturally.
 (function () {
   var src = require('fs').readFileSync(__dirname + '/../js/speech.js', 'utf8');

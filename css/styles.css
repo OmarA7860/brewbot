@@ -7,12 +7,12 @@
 :root {
   --bg: #f6efe7;
   --panel: #fffcf8;
-  --line: #e6d9ca;
+  --line: #dccab6;
   --ink: #2a1c13;
-  --ink-soft: #6b5646;
+  --ink-soft: #5e4a3c;
   --espresso: #5a3825;
   --espresso-dark: #3f2618;
-  --caramel: #b8692a;
+  --caramel: #9a5420;
   --cream: #f4e7d8;
   --foam: #fbf5ee;
   --green: #2f7a4b;
@@ -276,7 +276,7 @@ kbd { font: 12px var(--sans); background: #fff; border: 1px solid var(--line); b
 .order-list li { display: grid; grid-template-columns: 92px 1fr auto; gap: 8px; align-items: baseline; padding: 3px 8px; border-radius: 8px; font-size: 14px; border-bottom: 1px dashed var(--line); }
 .order-list .k { color: var(--ink-soft); }
 .order-list .v { font-weight: 600; }
-.order-list .v.empty { color: #9c8a7c; font-weight: 400; font-style: italic; }
+.order-list .v.empty { color: #6f5b4a; font-weight: 400; font-style: italic; }
 .order-list li.asking { background: #fff3e3; border-bottom-color: transparent; }
 .order-list li.asking .v.empty { color: var(--caramel); font-style: normal; font-weight: 700; }
 .order-list li.flash { animation: flash 1.2s ease-out; }
@@ -331,7 +331,7 @@ kbd { font: 12px var(--sans); background: #fff; border: 1px solid var(--line); b
 .tr-eta { font-weight: 700; color: var(--caramel); font-variant-numeric: tabular-nums; }
 .tracker.ready .tr-eta { color: var(--green); }
 .tr-steps { list-style: none; margin: 12px 0 8px; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.tr-steps li { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 13.5px; color: #9c8a7c; position: relative; }
+.tr-steps li { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 13.5px; color: #6f5b4a; position: relative; }
 .tr-steps li::before { content: ""; width: 18px; height: 18px; border-radius: 50%; border: 3px solid #d8c8b8; background: #fff; margin-bottom: 4px; box-sizing: border-box; transition: all .3s; }
 .tr-steps li.done { color: var(--ink); }
 .tr-steps li.done::before { border-color: var(--green); background: var(--green); }
@@ -515,3 +515,8 @@ kbd { font: 12px var(--sans); background: #fff; border: 1px solid var(--line); b
 .welcome { max-width: 580px; }
 .chip.chip-drink { width: 92px; }
 .quick-replies.with-pictures { gap: 8px; }
+
+/* Readable placeholder text (WCAG AA contrast) */
+input::placeholder, textarea::placeholder { color: #75614f; opacity: 1; }
+/* Buttons in older messages are switched off once BrewBot has moved on */
+.receipt button:disabled, .heard-check button:disabled { opacity: .45; cursor: not-allowed; }

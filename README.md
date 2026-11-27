@@ -128,7 +128,7 @@ The conversation logic has no screen or audio code in it, which is what makes it
 ## Tests
 
 ```bash
-node tests/dialogue.test.js        # 82 conversation tests, no browser needed
+node tests/dialogue.test.js        # 86 conversation tests, no browser needed
 
 python -m http.server 8123 &       # then, with Playwright installed:
 python tests/browser_test.py       # runs every test case in a real browser with a simulated microphone
@@ -146,7 +146,7 @@ Personas, user journey, task flow, conversation flowcharts and wireframes are in
 
 ## Known limitations
 
-- One kind of drink per order.
+- One kind of drink per order. Asking for a second drink saves it as the next order, which BrewBot offers right after the first is placed.
 - Voice input needs Edge or Chrome and an internet connection (the browser's speech service is online).
 - The rule-based understanding can miss unusual phrasing; buttons and typing always work.
 - Payment, the shop and order numbers are simulated. Nothing is stored after the tab is closed.
