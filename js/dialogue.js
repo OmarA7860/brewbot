@@ -28,7 +28,22 @@
 window.BB = window.BB || {};
 
 BB.Dialogue = (function () {
-  var ACKS = ['Got it.', 'Great.', 'Perfect.', 'Okay.', 'Nice.'];
+  var ACKS = ['Got it.', 'Great.', 'Perfect.', 'Lovely.', 'Okay.', 'Nice choice.', 'Sure thing.'];
+
+  // What BrewBot SAYS for each question. The screen keeps the full question with
+  // every option, so the spoken line can be short and natural, like a barista.
+  // Repeat, Help and any retry after a problem still read the full version.
+  var SPOKEN_QUESTIONS = {
+    drink: 'What can I get you today?',
+    size: 'What size would you like?',
+    temp: 'Hot or iced?',
+    milk: 'And which milk would you like?',
+    extras: 'Any extras, like a syrup or an extra shot?',
+    quantity: 'How many would you like?',
+    pickup: 'When would you like to pick it up?',
+    name: 'And what name should I put on it?',
+    payment: 'Will that be card or cash at pickup?'
+  };
 
   var QUESTIONS = {
     drink: 'What would you like to drink? We have lattes, cappuccinos, americanos, mochas, cold brew, chai lattes and tea.',
@@ -236,9 +251,15 @@ BB.Dialogue = (function () {
       q = 'When do you want to pick it up? As soon as possible is about ' + BB.SHOP.prepMinutes + ' minutes' +
         (ex ? ', or you can give me a time like ' + formatTime(ex) + '.' : '.');
     }
-    if (this.order.quantity > 1) q = q.replace('pick it up', 'pick them up').replace('like it hot', 'like them hot');
+    var said = (extra && extra.short) || this.fails > 0 ? q : SPOKEN_QUESTIONS[slot];
+    if (this.order.quantity > 1) {
+      q = q.replace('pick it up', 'pick them up').replace('like it hot', 'like them hot');
+      said = said.replace('pick it up', 'pick them up');
+    }
     var text = prefix ? prefix + ' ' + q : q;
-    return this.reply(text, Object.assign({ quick: this.quickFor(slot) }, extra || {}));
+    var sayPrefix = extra && extra.spokenPrefix !== undefined ? extra.spokenPrefix : prefix;
+    var spoken = sayPrefix ? sayPrefix + ' ' + said : said;
+    return this.reply(text, Object.assign({ quick: this.quickFor(slot), spoken: spoken }, extra || {}));
   };
 
   /* Ask the next empty slot, or move to confirmation when nothing is missing. */
@@ -258,9 +279,14 @@ BB.Dialogue = (function () {
     var text = (prefix ? prefix + ' ' : '') + 'Here’s your order: ' + this.describeDrink() +
       ', ready ' + when + ', under the name ' + o.name + ', paying ' + pay +
       '. Your total is ' + money(t.total) + ' with tax. Should I place the order?';
+    // Spoken the way a barista would read it back: every detail, in a natural rhythm.
+    var spoken = (prefix ? prefix + ' ' : '') + 'So that’s ' + this.describeDrink() +
+      ', ready ' + (o.pickup.asap ? 'around ' + formatTime(this.readyTime()) : 'at ' + formatTime(o.pickup.time)) +
+      ', for ' + o.name + ', paying ' + (o.payment === 'card' ? 'by card' : 'with cash') +
+      '. That comes to ' + money(t.total) + ' with tax. Shall I place the order?';
     return this.reply(text, Object.assign({
       quick: [{ label: 'Yes, place my order', value: 'Yes, place my order' }, { label: 'Change something', value: 'Change something' }],
-      outcome: 'confirm'
+      outcome: 'confirm', spoken: spoken
     }, extra || {}));
   };
 
@@ -280,7 +306,8 @@ BB.Dialogue = (function () {
 
   Dialogue.prototype.start = function () {
     this.reset();
-    return this.ask('drink', 'Hi, I’m BrewBot! I can take your pickup order for Bean & Brew. You can talk to me with the mic button or type your answers.', { outcome: 'greeting' });
+    return this.ask('drink', 'Hi, I’m BrewBot! I can take your pickup order for Bean & Brew. You can talk to me with the mic button or type your answers.',
+      { outcome: 'greeting', spokenPrefix: 'Hi, I’m BrewBot! Just tap Talk and tell me what you’d like, or type if you prefer.' });
   };
 
   Dialogue.prototype.repeat = function () {
@@ -685,7 +712,7 @@ BB.Dialogue = (function () {
       if (res.set.length) {
         var names = res.set.filter(function (s) { return s !== 'pickup' && s !== 'payment' && s !== 'quantity'; })
           .map(function (s) { return self.displayValue(s).toLowerCase(); });
-        if (res.set.length > 2 && !res.changed.length) pieces.push(this.ack() + ' I’ve got ' + this.describeDrink() + '.');
+        if (res.set.length > 2 && !res.changed.length) pieces.push(this.ack().replace('Got it.', 'Okay.') + ' That’s ' + this.describeDrink() + '.');
         else if (res.set.indexOf('quantity') !== -1 && res.set.length === 1) pieces.push(this.ack() + ' ' + this.order.quantity + (this.order.quantity === 1 ? ' drink.' : ' drinks.'));
         else if (res.set.indexOf('pickup') !== -1 && res.set.length === 1) pieces.push(this.ack() + ' Pickup ' + (this.order.pickup.asap ? 'as soon as possible, around ' + formatTime(this.readyTime()) : 'at ' + formatTime(this.order.pickup.time)) + '.');
         else if (names.length) pieces.push(this.ack() + ' ' + capitalize(joinList(names)) + '.');

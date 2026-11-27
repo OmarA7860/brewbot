@@ -289,8 +289,14 @@ with sync_playwright() as p:
     check("type everything" in page3.locator("#voiceNote").inner_text(), "no-voice browsers told to type")
     check(page3.locator("#micBtn").is_disabled(), "mic disabled without voice support")
 
-    vs = page2.locator("#voiceStatus").inner_text()
-    check(vs in ("Standard browser voice", "Voice not available") or vs.startswith("Natural voice") or vs.startswith("Loading"), "voice status shown: " + vs)
+    # No technical voice wording on screen; a plain note only when there is no voice at all.
+    vs = page2.locator("#voiceStatus")
+    used = page2.get_attribute("#muteBtn", "data-voice") or ""
+    check(vs.is_hidden() or "aren’t available" in vs.inner_text(), "no technical voice label on screen (voice in use: " + used + ")")
+    check("Natural voice" not in page2.locator("body").inner_text(), "no 'Natural voice' wording anywhere on the page")
+    # Spoken replies are the short natural versions, and 'mic' is never spelled out.
+    spoken = page2.evaluate("window.__lastSpoken || ''")
+    check(" mic " not in spoken.lower(), "'mic' is pronounced as a word in speech")
     check(not errors and not errors2, "no JavaScript errors: " + "; ".join(errors + errors2))
     browser.close()
 

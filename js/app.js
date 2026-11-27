@@ -283,7 +283,9 @@
       if (reply.focusInput) el.input.focus();
       if (ui.muted || !BB.Speech.canSpeak()) { finishTurn(reply, autoListen); return; }
       setState('speaking');
-      BB.Speech.speak(reply.text, { onEnd: function () { finishTurn(reply, autoListen); } });
+      // Speak the short natural version; Repeat reads the full on-screen text.
+      var say = (!reply.isRepeat && reply.spoken) ? reply.spoken : reply.text;
+      BB.Speech.speak(say, { onEnd: function () { finishTurn(reply, autoListen); } });
     }, opts.instant ? 0 : THINK_MS);
   }
 
@@ -381,6 +383,7 @@
   /* ---------------- voice input ---------------- */
 
   /* auto = true when the mic was turned on automatically after BrewBot spoke. */
+  var heardSomething = false; // true while a listening session that played the opening sound is active
   function startListening(auto) {
     if (!ui.started || ui.paused) return;
     clearTimeout(ui.idleTimer);
@@ -393,6 +396,8 @@
     el.interim.classList.add('show');
     BB.Speech.startListening({
       onStart: function () {
+        earcon(true);
+        heardSomething = true;
         setState('listening');
         el.mic.classList.add('listening');
         el.mic.setAttribute('aria-label', 'Stop listening');
@@ -402,10 +407,14 @@
       },
       onPartial: function (text) { el.interim.textContent = text; hearing(); },
       onFinal: function (text, info) {
+        if (heardSomething) earcon(false);
+        heardSomething = false;
         resetMic();
         submit(text, 'voice', info);
       },
       onError: function (kind) {
+        if (heardSomething) earcon(false);
+        heardSomething = false;
         resetMic();
         // If the mic came on by itself and the user simply didn't talk, just stop quietly.
         if (auto === true && kind === 'no-speech') { setState('idle'); startIdleTimer(); return; }
@@ -734,6 +743,28 @@
   }
   window.addEventListener('focus', function () { if (document.title !== baseTitle && !tracker) document.title = baseTitle; });
 
+  /* Short sounds when the mic opens (rising) and closes (falling), like phone assistants. */
+  function earcon(opening) {
+    if (ui.muted) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = chime.ctx || (chime.ctx = new Ctx());
+      var notes = opening ? [[587.33, 0], [880, 0.07]] : [[880, 0], [587.33, 0.07]];
+      notes.forEach(function (n) {
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = n[0];
+        var t = ctx.currentTime + n[1];
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.07, t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(t); o.stop(t + 0.2);
+      });
+      ui.earcons = (ui.earcons || 0) + 1;
+    } catch (e) {}
+  }
+
   /* A soft two-note chime made in the browser (no sound file needed). */
   function chime() {
     try {
@@ -856,7 +887,12 @@
   var voiceStatus = $('voiceStatus');
   BB.Speech.onVoiceStatus(function (st) {
     if (!voiceStatus) return;
-    voiceStatus.textContent = st.label;
+    // Users don't need to know which voice engine is used; only tell them when there is no voice at all.
+    // (The voice in use is kept on the Voice button's data-voice attribute for our own checks.)
+    el.muteBtn.setAttribute('data-voice', st.label);
+    var none = st.label === 'Voice not available';
+    voiceStatus.textContent = none ? 'Spoken replies aren’t available in this browser. Everything is shown as text.' : '';
+    voiceStatus.hidden = !none;
     voiceStatus.setAttribute('data-state', st.state);
   });
   setTimeout(function () { BB.Speech.loadNaturalVoice(); }, 1200);

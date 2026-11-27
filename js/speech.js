@@ -290,6 +290,30 @@ BB.Speech = (function () {
   function canSpeak() { return !!synth; }
 
   /*
+   * Pronunciation fixes. Screen text stays as it is; only the spoken copy changes,
+   * so words like "mic" are said as a word instead of being spelled out.
+   */
+  var SAY_AS = [
+    [/\bmics?\b/gi, function (m) { return /s$/i.test(m) ? 'mikes' : 'mike'; }],
+    [/\bCtrl\s*\+\s*/g, 'Control '],
+    [/\s*&\s*/g, ' and '],
+    [/\bHST\b/g, 'H S T'],
+    [/×/g, ' times '],
+    [/#\s?(\d)/g, 'number $1'],
+    [/\b(\d{1,2}(?::\d{2})?)\s?(am|pm)\b/gi, function (m, time, ap) { return time + ' ' + ap.toUpperCase().split('').join(' '); }],
+    [/\$(\d+)\.00\b/g, '$1 dollars'],
+    [/\$(\d+)\.(\d{2})\b/g, function (m, d, c) { return d + (d === '1' ? ' dollar and ' : ' dollars and ') + String(+c) + ' cents'; }],
+    [/\be\.g\.\s*/gi, 'for example, '],
+    [/[“”"]/g, ''],
+    [/\.\.\./g, ', ']
+  ];
+  function forSpeech(text) {
+    var s = String(text);
+    SAY_AS.forEach(function (r) { s = s.replace(r[0], r[1]); });
+    return s.replace(/\s{2,}/g, ' ').trim();
+  }
+
+  /*
    * speak(text, {onStart, onEnd})
    * Long text is split into a few chunks because Chrome sometimes cuts off
    * long utterances. onEnd is always called, even if the browser forgets.
@@ -298,7 +322,7 @@ BB.Speech = (function () {
     cb = cb || {};
     stopSpeaking();
     var token = ++speakToken;
-    var clean = String(text).replace(/[“”"]/g, '').replace(/\$(\d+)\.(\d{2})/g, '$1 dollars $2');
+    var clean = forSpeech(text);
     var done = false;
     function finish() {
       if (done || token !== speakToken) return;
@@ -372,6 +396,7 @@ BB.Speech = (function () {
     stopSpeaking: stopSpeaking,
     isSpeaking: function () { return speaking; },
     setRate: function (r) { VOICE_RATE = r; },
+    forSpeech: forSpeech,
     loadNaturalVoice: loadNaturalVoice,
     onVoiceStatus: function (fn) { statusListener = fn; report(); },
     unlockAudio: function () { try { if (neural.state !== 'off') ensureAudio(); } catch (e) {} },

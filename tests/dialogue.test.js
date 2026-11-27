@@ -271,5 +271,40 @@ run('Order placed records the time for the tracker', ['Latte', 'Small', 'Hot', '
   return p;
 });
 
+run('Spoken questions are short; the screen keeps every option', ['Latte'], function (d, r) {
+  var p = [];
+  expect(r.spoken && r.spoken.length < r.text.length && /small, medium or large/.test(r.text) && !/small, medium or large/.test(r.spoken), 'short spoken size question', p);
+  return p;
+});
+run('After a problem the full question is spoken', ['Latte', 'purple elephant'], function (d, r) {
+  var p = [];
+  expect(!r.spoken || /small, medium or large|small|medium|large/.test(r.spoken), 'options spoken after a miss', p);
+  return p;
+});
+run('Repeat reads the full on-screen question', ['Latte', 'repeat'], function (d, r) {
+  var p = [];
+  expect(r.isRepeat && /small, medium or large/.test(r.text), 'repeat has full text', p);
+  return p;
+});
+
+// Pronunciation: the spoken copy says "mic" as a word, money and times naturally.
+(function () {
+  var src = require('fs').readFileSync(__dirname + '/../js/speech.js', 'utf8');
+  var block = src.match(/var SAY_AS = \[[\s\S]*?\n  \}\n/)[0];
+  var forSpeech = eval('(function(){' + block + '; return forSpeech;})()');
+  var cases = [
+    ['Press the mic button', 'Press the mike button'],
+    ['Bean & Brew', 'Bean and Brew'],
+    ['Your total is $16.16 with tax.', 'Your total is 16 dollars and 16 cents with tax.'],
+    ['ready at 3:30 pm', 'ready at 3:30 P M'],
+    ['Press Ctrl + M', 'Press Control M']
+  ];
+  cases.forEach(function (c) {
+    var got = forSpeech(c[0]);
+    if (got === c[1]) { passed++; console.log('PASS  pronunciation: ' + c[0]); }
+    else { failed++; console.log('FAIL  pronunciation: ' + c[0] + ' -> ' + got); }
+  });
+})();
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);

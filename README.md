@@ -6,7 +6,7 @@ BrewBot is an animated coffee-cup avatar that takes your pickup order by **voice
 It remembers what you've said, asks only for what's missing, shows your drink being built as you go, and
 confirms everything before placing the order. Made for the SOFE4850 UX Project at Ontario Tech University (Fall 2026).
 
-**Live demo:** https://OmarA7860.github.io/brewbot/ &nbsp;(open in **Microsoft Edge** or **Google Chrome** on a computer)
+**Live demo:** [https://OmarA7860.github.io/brewbot/](https://OmarA7860.github.io/brewbot/) &nbsp;(open in **Microsoft Edge** or **Google Chrome** on a computer)
 
 ![BrewBot ordering page](docs/screenshots/main.png)
 
@@ -44,7 +44,7 @@ confirms everything before placing the order. Made for the SOFE4850 UX Project a
 **Target platform:** desktop browser, **Microsoft Edge** (best natural voice) or **Google Chrome**, window 1280 px wide or more.
 Voice input needs the page to be served over `http://localhost` or `https`, not opened as a file.
 
-**Option 1: the live link** (if GitHub Pages is turned on): open the link above in Edge or Chrome.
+**Option 1: the live link:** open [OmarA7860.github.io/brewbot](https://OmarA7860.github.io/brewbot/) in Edge or Chrome.
 
 **Option 2: start script** (needs Python 3)
 - Windows: double-click `start-windows.bat`
