@@ -97,8 +97,24 @@ def speak(page, text, conf=0.9):
 def shot(page, name):
     page.screenshot(path=os.path.join(OUT, name + ".png"))
 
+# The shop is open 7 am to 9 pm, so the tests pretend it is 2 pm today.
+# This keeps pickup-time answers valid whatever time the tests are run.
+FIXED_CLOCK = """
+(() => {
+  const RealDate = Date;
+  const target = new RealDate(); target.setHours(14, 0, 0, 0);
+  const offset = target - new RealDate();
+  function FakeDate(...args) { return args.length ? new RealDate(...args) : new RealDate(RealDate.now() + offset); }
+  FakeDate.prototype = RealDate.prototype;
+  FakeDate.now = () => RealDate.now() + offset;
+  FakeDate.UTC = RealDate.UTC; FakeDate.parse = RealDate.parse;
+  window.Date = FakeDate;
+})();
+"""
+
 def new_page(browser):
     ctx = browser.new_context(viewport={"width": 1366, "height": 800})
+    ctx.add_init_script(FIXED_CLOCK)
     ctx.add_init_script(FAKE_SPEECH)
     page = ctx.new_page()
     errors = []

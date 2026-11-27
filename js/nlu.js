@@ -265,6 +265,10 @@ BB.NLU = (function () {
   var NOT_A_NAME = /^(no|yes|yeah|yep|nope|okay|ok|sure|right|correct|that's|thats|that|this|it|it's|its|what|why|how|um|uh|hmm|the|a|an|i|me|my|and|is|just|put|please|thanks|thank|hello|hi|hey|can|could|would|i'd|i'll|we|you|they|he|she|name|first|sorry|wait|so|well|like|um|oh|for|under|as|to|be|do|not)$/i;
   function parseName(raw) {
     var t = String(raw).trim().replace(/[.!?,]+$/g, '').replace(/\s+/g, ' ');
+    // "I've been watching YouTube, put the name Samantha": keep what comes after the LAST name cue.
+    var cue = /\b(put the name|put down the name|the name is|name is|name's|my name is|call me|put it under|under the name|put down|put)\s+/gi, m, last = -1;
+    while ((m = cue.exec(t))) last = cue.lastIndex;
+    if (last > 0 && last < t.length) t = t.slice(last);
     t = t.replace(/^((hi|hey|hello|um|uh|so|okay|ok|oh|yeah|sure)[, ]+)+/i, '');
     // endings: "... as the first name", "... for the name", "... please"
     t = t.replace(/\s+(as|for|on|under)\s+(the|my|your|our)?\s*(first\s+)?name\b.*$/i, '')
@@ -324,8 +328,46 @@ BB.NLU = (function () {
       .replace(/\b(?:an? |one )?(?:shots?) of espresso\b/g, ' extra shot ');
   }
 
+  /*
+   * Typos ("cofeee", "vanills", "lstte", "dyrup"): a word that isn't known is
+   * replaced by a menu word that is one or two letters away. Names are never
+   * changed, and short words are left alone so "hat" doesn't become "hot".
+   */
+  var VOCAB = (function () {
+    var set = {};
+    PHRASES.forEach(function (p) { p.phrase.split(/\s+/).forEach(function (w) { if (/^[a-z]{4,}$/.test(w)) set[w] = true; }); });
+    'coffee syrup with milk please large medium small iced cappuccino americano'.split(' ').forEach(function (w) { set[w] = true; });
+    return Object.keys(set);
+  })();
+  var COMMON = /^(back|help|stop|menu|undo|redo|over|again|wait|hold|done|pause|start|reset|restart|slow|slower|fast|faster|repeat|cancel|skip|next|plain|cool|fine|same|both|either|neither|first|second|last|call|take|keep|hard|easy|best|most|love|mine|ours|work|home|late|early|hello|black|blank|bake|lack|track|bank|park|mark|mike|told|tell|said|says|went|gone|come|came|look|went|play|play|game|food|free|full|half|zero|four|five|nine|eight|seven|three|twelve|eleven|twenty|thirty|forty|fifty|hundred|dollar|dollars|cents|price|prices|cost|order|orders|drink|drinks|coffee|coffees|cream|sugar|honey|water|juice|thing|things|stuff|other|another|every|everything|nothing|something|anything|which|where|while|whole|watch|watching|youtube|phone|music|video|people|person|friend|guys|they're|we're|you're|it's|i'm|i've|can't|don't|won't|isn't|aren't|wasn't|weren't|with|have|give|want|would|could|like|please|thanks|that|this|what|when|just|make|order|their|there|they|them|then|than|from|your|some|more|less|much|many|time|name|pick|will|only|also|okay|yeah|sure|cash|card|none|actually|instead|change|minutes|hour|hours|soon|possible|thank|right|wrong|good|great|nice|maybe|well|about|around|after|before|today|tonight|morning|later|now|here|still|need|know|think|guess|really|sorry)$/;
+  function distance(a, b) {
+    var d = [], i, j;
+    for (i = 0; i <= a.length; i++) { d[i] = [i]; }
+    for (j = 0; j <= b.length; j++) d[0][j] = j;
+    for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++) {
+      var cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+    return d[a.length][b.length];
+  }
+  function fixTypos(text, currentSlot) {
+    if (currentSlot === 'name') return text;
+    return text.replace(/[a-z]{4,}/g, function (w) {
+      if (COMMON.test(w) || VOCAB.indexOf(w) !== -1 || KNOWN_WORDS[w]) return w;
+      var best = null, bestD = 9;
+      VOCAB.forEach(function (v) {
+        if (Math.abs(v.length - w.length) > 2) return;
+        var dd = distance(w, v);
+        if (dd < bestD) { bestD = dd; best = v; }
+      });
+      var limit = w.length >= 7 ? 2 : 1;
+      return best && bestD <= limit ? best : w;
+    });
+  }
+
   function understand(rawText, currentSlot, now) {
-    var text = rephrase(fixSoundalike(normalize(rawText), currentSlot));
+    var text = rephrase(fixSoundalike(' ' + fixTypos(normalize(rawText), currentSlot) + ' ', currentSlot));
     var result = {
       raw: rawText, text: text.trim(),
       values: {}, extras: [], conflicts: {}, unsupported: [],
@@ -410,6 +452,9 @@ BB.NLU = (function () {
       : /^\s*(thanks|thank you|thx|cheers|ty)\b/.test(text) && !Object.keys(result.values).length ? 'thanks' : null;
     result.priceQuestion = /\b(how much|price|prices|cost|costs|expensive|cheap|cheapest|difference between|what's the difference|whats the difference)\b/.test(text);
     result.recommend = /\b(recommend|recommendation|suggest|suggestion|surprise me|what'?s (good|popular|best)|whats (good|popular|best)|most popular|what do (people|most people) (get|order)|your favou?rite|you pick|you choose|dealer'?s choice|up to you|(i )?don'?t (really )?know|not (really )?sure|no idea|can'?t decide|dunno|whatever you (think|recommend))\b/.test(text);
+
+    // "No payment" / "I won't pay": explain instead of "didn't understand"
+    result.refusePay = currentSlot === 'payment' && /\b(no|not|won'?t|don'?t|never|without)\b.*\b(pay|paying|payment)\b|\bfor free\b|\bfree\b/.test(text) && !result.values.payment;
 
     // "Do you have ...?" questions
     var avail = text.match(/\b(?:do|does|d'?) ?(?:you|u|ya|y'all)(?: guys| all)? (?:have|sell|make|serve|do|got|carry)\s+(?:an? |any |some |the )?([a-z' ]{2,40}?)\s*$/);

@@ -451,6 +451,9 @@ BB.Dialogue = (function () {
       if (r.recommend && this.phase === 'asking') return this.suggest();
     }
     if (r.priceQuestion && !r.command && this.phase !== 'done') return this.prices(r);
+    if (r.refusePay) {
+      return this.ask('payment', 'Payment happens at the counter when you pick up your drink, so nothing is charged now. I just need to know if you’ll use card or cash.', { outcome: 'clarify', short: true });
+    }
 
     // Commands that work at any point
     if (r.command === 'restart') {
@@ -923,7 +926,9 @@ BB.Dialogue = (function () {
     this.phase = 'asking';
     this.current = 'drink';
     var coffees = ids.map(function (id) { var d = BB.option('drink', id); return { label: d.label, value: d.label }; });
-    return this.reply((prefix ? prefix + ' ' : 'Sure! ') + 'Which kind of coffee would you like? We have a latte, cappuccino, americano, mocha or cold brew.', { quick: coffees, outcome: 'clarify' });
+    var iced = this.order.temp === 'iced';
+    var lead = iced ? 'For an iced coffee, cold brew or an iced americano are the closest. ' : '';
+    return this.reply((prefix ? prefix + ' ' : (iced ? '' : 'Sure! ')) + lead + 'Which kind of coffee would you like? We have a latte, cappuccino, americano, mocha or cold brew.', { quick: coffees, outcome: 'clarify' });
   };
 
   Dialogue.prototype.clarify = function (r, prefix) {

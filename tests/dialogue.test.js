@@ -448,6 +448,33 @@ run('Unclear time gives a real example time, never a raw date', TO_PICKUP.concat
   return p;
 });
 
+// ---------- P1 second session ----------
+run('P1-2: typos are forgiven ("iced cofeee with vanills dyrup", "lstte")', ['give me iced cofeee with vanills dyrup', 'lstte'], function (d, r) {
+  var p = [];
+  expect(d.order.drink === 'latte' && d.order.temp === 'iced' && JSON.stringify(d.order.extras) === '["vanilla"]', 'iced latte with vanilla, got ' + JSON.stringify(d.order), p);
+  return p;
+});
+run('P1-2: typo fixing never changes commands ("back")', ['Latte', 'Large', 'back'], function (d, r) {
+  var p = [];
+  expect(r.outcome === 'back' && !d.order.milk, 'went back, milk untouched', p);
+  return p;
+});
+run('P1-2: name after background talk ("...YouTube put the name Samantha")', TO_NAME.concat([V("I was watching I've been watching YouTube put the name Samantha.")]), function (d, r) {
+  var p = [];
+  expect(/Samantha\. Is that right/.test(r.text), 'asks to confirm Samantha, got: ' + r.text, p);
+  return p;
+});
+run('P1-2: "no payment" explains paying at the counter', TO_NAME.concat(['Sam', 'no payment']), function (d, r) {
+  var p = [];
+  expect(/at the counter/.test(r.text) && d.current === 'payment', 'explains payment, got: ' + r.text, p);
+  return p;
+});
+run('P1-2: "iced coffee" points to the closest iced drinks', ['iced coffee with vanilla syrup'], function (d, r) {
+  var p = [];
+  expect(/cold brew or an iced americano/.test(r.text), 'suggests iced options, got: ' + r.text, p);
+  return p;
+});
+
 // Pronunciation: the spoken copy says "mic" as a word, money and times naturally.
 (function () {
   var src = require('fs').readFileSync(__dirname + '/../js/speech.js', 'utf8');
