@@ -74,6 +74,11 @@ BB.UNSUPPORTED = {
     { words: ['matcha'], name: 'matcha', hint: 'we do have green tea' },
     { words: ['espresso', 'espressos'], name: 'straight espresso', hint: 'an americano is espresso with hot water' },
     { words: ['macchiato', 'flat white', 'cortado'], name: 'that drink', hint: 'a latte is the closest option' },
+    { words: ['spanish latte', 'spanish lattes', 'spanish late', 'dulce de leche latte'], name: 'a Spanish latte', hint: 'a latte with caramel syrup is the closest thing we have' },
+    { words: ['pistachio latte', 'honey latte', 'lavender latte', 'rose latte', 'maple latte', 'brown sugar latte', 'pumpkin spice latte', 'pumpkin latte', 'hazelnut latte'], name: 'that latte', hint: 'we have lattes with vanilla or caramel syrup' },
+    { words: ['dirty chai'], name: 'a dirty chai', hint: 'a chai latte with an extra shot is the same thing' },
+    { words: ['london fog'], name: 'a London Fog', hint: 'we have tea or a vanilla latte' },
+    { words: ['turkish coffee', 'irish coffee', 'drip coffee', 'filter coffee', 'brewed coffee', 'black coffee'], name: 'that coffee', hint: 'an americano is the closest' },
     { words: ['smoothie', 'juice', 'lemonade', 'pop', 'soda', 'milkshake', 'water'], name: 'that', hint: 'we only make coffee and tea drinks' },
     { words: ['muffin', 'bagel', 'croissant', 'cookie', 'sandwich', 'donut', 'doughnut', 'cake', 'food', 'scone'], name: 'food', hint: 'I can only take drink orders for now' }
   ],
@@ -90,7 +95,12 @@ BB.UNSUPPORTED = {
   ],
   extras: [
     { words: ['hazelnut', 'pumpkin spice', 'peppermint', 'chocolate syrup', 'mocha syrup', 'cinnamon', 'sprinkles', 'honey', 'maple'], name: 'that flavour', hint: 'we have vanilla or caramel syrup' },
-    { words: ['sugar', 'sweetener', 'splenda', 'stevia'], name: 'sugar', hint: 'sugar and sweetener are at the self-serve counter, free' }
+    { words: ['sugar', 'sweetener', 'splenda', 'stevia'], name: 'sugar', hint: 'sugar and sweetener are at the self-serve counter, free' },
+    // Small changes we can't take online. 'msg' replaces the usual "we don't have" line.
+    { words: ['less ice', 'light ice', 'little ice', 'no ice', 'extra ice', 'more ice', 'easy ice', 'half ice'], name: 'ice change',
+      msg: 'I can’t change the amount of ice online, but just ask the barista when you pick it up.' },
+    { words: ['extra hot', 'extra foam', 'no foam', 'less foam', 'more foam', 'light foam', 'not too hot', 'warm not hot'], name: 'that change',
+      msg: 'I can’t take that change online, but just ask the barista when you pick it up.' }
   ]
 };
 

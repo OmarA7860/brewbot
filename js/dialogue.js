@@ -215,8 +215,11 @@ BB.Dialogue = (function () {
     }
   };
 
-  Dialogue.prototype.ack = function () {
-    var a = ACKS[this.ackIndex % ACKS.length];
+  // "Nice choice" fits a drink, not a payment method or a time.
+  var PLAIN_ACKS = ['Got it.', 'Okay.', 'Perfect.', 'Sure thing.', 'Great.'];
+  Dialogue.prototype.ack = function (plain) {
+    var list = plain ? PLAIN_ACKS : ACKS;
+    var a = list[this.ackIndex % list.length];
     this.ackIndex++;
     return a;
   };
@@ -427,6 +430,23 @@ BB.Dialogue = (function () {
       return this.continueFrom('Okay, we’ll keep going.', { short: true });
     }
 
+    // Waiting on "Most people go for a latte. Would you like that?"
+    if (this.pending && this.pending.type === 'suggest') {
+      var ps = this.pending;
+      this.pending = null;
+      if (r.yes && !this.isUseful(r)) {
+        var take = BB.NLU.understand(ps.value, ps.slot, now);
+        return this.afterApply(this.apply(take), take, {});
+      }
+    }
+
+    // Small talk, prices and suggestions: answer like a person, then get back to the order.
+    if (!r.command && !this.isUseful(r) && !r.unsupported.length) {
+      if (r.smalltalk) return this.smallTalk(r.smalltalk);
+      if (r.recommend && this.phase === 'asking') return this.suggest();
+    }
+    if (r.priceQuestion && !r.command && this.phase !== 'done') return this.prices(r);
+
     // Commands that work at any point
     if (r.command === 'restart') {
       if (!this.history.length && !this.anyFilled()) return this.start();
@@ -483,7 +503,7 @@ BB.Dialogue = (function () {
       if (r.no || r.command === 'change') return this.askWhatToChange();
       var f = this.fieldFromText(r);
       if (f) return this.startChange(f);
-      return this.confirm('Sorry, I didn’t catch that. Just say yes to place it, or tell me what to change.', { outcome: 'not_understood', mood: 'confused' });
+      return this.notUnderstood(r, meta);
     }
 
     // "change the milk" with no new value given
@@ -536,17 +556,50 @@ BB.Dialogue = (function () {
       if (r.no || /\b(type|typing)\b/.test(r.text)) {
         return this.reply('No problem. Please type your first name in the box below.', { outcome: 'clarify', focusInput: true, quick: [] });
       }
-      // Anything else is treated as a new attempt at the name.
+      // Anything else is treated as a new attempt at the name ("Just Sam").
+      var again = BB.NLU.parseName(raw);
+      if (again && again.words <= 2 && !this.isUsefulOrderInfo(r)) {
+        if (meta.mode === 'voice' && again.name !== pn.name) {
+          this.pending = { type: 'confirmName', name: again.name };
+          return this.reply('I heard ' + again.name + '. Is that right?', {
+            outcome: 'clarify', quick: [{ label: 'Yes, that’s right', value: 'Yes' }, { label: 'No, I’ll type it', value: 'No, I will type it' }]
+          });
+        }
+        this.setSlot('name', again.name);
+        return this.continueFrom('Thanks, ' + again.name + '.');
+      }
+      if (this.current === 'name' && !this.isUsefulOrderInfo(r)) {
+        this.pending = pn;
+        return this.reply('Sorry, is your name ' + pn.name + '? Just say yes, or type your name below.', {
+          outcome: 'clarify', quick: [{ label: 'Yes, that’s right', value: 'Yes' }, { label: 'No, I’ll type it', value: 'No, I will type it' }]
+        });
+      }
+    }
+
+    // A name given while BrewBot was asking something else.
+    if (r.name && this.current !== 'name' && !this.isUsefulOrderInfo(r) && !(r.time && !r.time.error)) {
+      if (meta.mode === 'voice') {
+        this.pending = { type: 'confirmName', name: r.name };
+        return this.reply('I heard the name ' + r.name + '. Is that right?', {
+          outcome: 'clarify', quick: [{ label: 'Yes, that’s right', value: 'Yes' }, { label: 'No, I’ll type it', value: 'No, I will type it' }]
+        });
+      }
+      this.setSlot('name', r.name);
+      return this.continueFrom('Thanks, ' + r.name + '.');
     }
 
     // Name is free text, so it is handled on its own.
     if (this.current === 'name' && !this.isUsefulOrderInfo(r)) {
       var parsed = BB.NLU.parseName(raw);
-      var words = raw.split(/\s+/).filter(Boolean).length;
-      var introduced = /\b(my name is|my name's|name is|i'm|i am|it's|call me|this is)\b/i.test(raw);
+      if (!parsed && (r.yes || r.no)) {
+        return this.reply('Sorry, I still need a first name for the order. What should I put on it? Typing it works best.', {
+          outcome: 'clarify', focusInput: true, quick: []
+        });
+      }
       if (meta.mode === 'voice') {
-        // Speech often picks up nearby talking. A long answer with no "my name is" is probably noise.
-        if (!parsed || (words > 3 && !introduced)) {
+        // Speech often picks up nearby talking. If, after removing phrases like
+        // "put ... as the name", more than two words are left, it is probably noise.
+        if (!parsed || parsed.words > 2) {
           this.fails++;
           return this.reply('I heard \u201c' + raw + '\u201d, which sounds like background noise. Please type your first name below, or press Talk and say just your name.', {
             outcome: 'not_understood', mood: 'confused', heardCheck: { text: raw }, focusInput: true, quick: []
@@ -683,12 +736,33 @@ BB.Dialogue = (function () {
     return out;
   };
 
+  /* True when every detail in the message matches what is already in the order. */
+  Dialogue.prototype.repeatsOrder = function (r) {
+    var o = this.order, self = this;
+    var slots = Object.keys(r.values);
+    if (!slots.length && !r.extras.length) return false;
+    var same = slots.every(function (s) { return self.isFilled(s) && JSON.stringify(o[s]) === JSON.stringify(r.values[s]); });
+    var extrasSame = !r.extras.length || (o.extras && r.extras.every(function (e) { return o.extras.indexOf(e) !== -1; }));
+    return same && extrasSame && !r.unsupported.length;
+  };
+
+  /* Every time problem says what went wrong AND which times would work (Nielsen 9). */
   Dialogue.prototype.timeProblem = function (t) {
-    var earliest = new Date(this.now().getTime() + BB.SHOP.prepMinutes * 60000);
+    var now = this.now();
+    var earliest = new Date(now.getTime() + BB.SHOP.prepMinutes * 60000);
+    var closing = new Date(now.getTime()); closing.setHours(BB.SHOP.closesAt, 0, 0, 0);
+    var opening = new Date(now.getTime()); opening.setHours(BB.SHOP.opensAt, 0, 0, 0);
+    var from = earliest < opening ? opening : earliest;
+    var window = from <= closing
+      ? ' Any time from ' + formatTime(from) + ' to ' + formatTime(closing) + ' works, or just say "as soon as possible".'
+      : ' We’re closed for new orders today. We’re open from 7 am to 9 pm.';
+    var heard = t.time ? formatTime(t.time) : '';
     if (t.error === 'too_soon') return 'That’s a bit too soon. Drinks take about ' + BB.SHOP.prepMinutes + ' minutes, so the earliest pickup is ' + formatTime(earliest) + '.';
-    if (t.error === 'closed') return 'We close at 9 pm, so please choose a time before then today.';
-    if (t.error === 'not_open') return 'We open at 7 am, so please choose a time after that.';
-    return 'Sorry, I didn’t catch the time. You can say "as soon as possible", "in 20 minutes" or a time like "3:30 pm".';
+    if (t.error === 'passed') return heard + ' has already passed today.' + window;
+    if (t.error === 'closed') return (heard ? heard + ' is after we close at 9 pm.' : 'We close at 9 pm.') + window;
+    if (t.error === 'not_open') return (heard ? heard + ' is before we open at 7 am.' : 'We open at 7 am.') + window;
+    var ex = this.exampleTime();
+    return 'Sorry, I didn’t catch the time. You can say "as soon as possible", "in 20 minutes"' + (ex ? ' or a time like "' + formatTime(ex) + '"' : '') + '.';
   };
 
   /* Decide what to say after applying the message. */
@@ -701,24 +775,29 @@ BB.Dialogue = (function () {
     var unsupportedMsg = '';
     if (r.unsupported.length) {
       var u = r.unsupported[0].item;
-      unsupportedMsg = 'Sorry, we don’t have ' + u.name + ', but ' + u.hint + '.';
+      unsupportedMsg = u.msg || ('Sorry, we don’t have ' + u.name + ', but ' + u.hint + '.');
     }
+    var oneDrinkNote = r.anotherDrink ? 'Right now I can take one kind of drink per order. Once this one is placed, just say “new order” and I’ll take the next one.' : '';
 
     if (changedSomething) {
-      if (unsupportedMsg) pieces.push(unsupportedMsg);
       res.changed.forEach(function (c) {
         pieces.push('I’ve changed the ' + BB.SLOT_LABELS[c.slot].toLowerCase() + ' from ' + lowerValue(c.slot, c.from) + ' to ' + lowerValue(c.slot, c.to) + '.');
       });
       if (res.set.length) {
         var names = res.set.filter(function (s) { return s !== 'pickup' && s !== 'payment' && s !== 'quantity'; })
           .map(function (s) { return self.displayValue(s).toLowerCase(); });
+        var drinkParts = res.set.filter(function (s) { return ['drink', 'size', 'temp', 'milk', 'extras'].indexOf(s) !== -1; });
         if (res.set.length > 2 && !res.changed.length) pieces.push(this.ack().replace('Got it.', 'Okay.') + ' That’s ' + this.describeDrink() + '.');
-        else if (res.set.indexOf('quantity') !== -1 && res.set.length === 1) pieces.push(this.ack() + ' ' + this.order.quantity + (this.order.quantity === 1 ? ' drink.' : ' drinks.'));
-        else if (res.set.indexOf('pickup') !== -1 && res.set.length === 1) pieces.push(this.ack() + ' Pickup ' + (this.order.pickup.asap ? 'as soon as possible, around ' + formatTime(this.readyTime()) : 'at ' + formatTime(this.order.pickup.time)) + '.');
+        else if (this.order.drink && (drinkParts.indexOf('drink') !== -1 || drinkParts.length >= 2)) pieces.push(this.ack() + ' ' + capitalize(this.describeDrink()) + '.');
+        else if (res.set.indexOf('quantity') !== -1 && res.set.length === 1) pieces.push(this.ack(true) + ' ' + this.order.quantity + (this.order.quantity === 1 ? ' drink.' : ' drinks.'));
+        else if (res.set.indexOf('payment') !== -1 && res.set.length === 1) pieces.push(this.ack(true) + ' ' + (this.order.payment === 'card' ? 'Card' : 'Cash') + ' at pickup.');
+        else if (res.set.indexOf('pickup') !== -1 && res.set.length === 1) pieces.push(this.ack(true) + ' Pickup ' + (this.order.pickup.asap ? 'as soon as possible, around ' + formatTime(this.readyTime()) : 'at ' + formatTime(this.order.pickup.time)) + '.');
         else if (names.length) pieces.push(this.ack() + ' ' + capitalize(joinList(names)) + '.');
         else pieces.push(this.ack());
       }
       res.notes.forEach(function (n) { pieces.push(n); });
+      if (unsupportedMsg) pieces.push(unsupportedMsg);
+      if (oneDrinkNote) pieces.push(oneDrinkNote);
       res.problems.forEach(function (p) { pieces.push(p); });
       this.fails = 0;
       var outcome = unsupportedMsg ? 'unsupported' : res.changed.length ? 'correction' : 'ok';
@@ -733,7 +812,12 @@ BB.Dialogue = (function () {
     var conflictSlots = Object.keys(r.conflicts);
     if (conflictSlots.length) return this.clarify(r, unsupportedMsg);
 
-    if (unsupportedMsg) {
+    if (unsupportedMsg || oneDrinkNote) {
+      unsupportedMsg = [unsupportedMsg, oneDrinkNote].filter(Boolean).join(' ');
+      if (!r.unsupported.length) {
+        if (this.phase === 'confirm') return this.confirm(unsupportedMsg, { outcome: 'unsupported' });
+        return this.ask(this.current || this.nextSlot() || 'drink', unsupportedMsg, { outcome: 'unsupported', short: true });
+      }
       this.fails++;
       var slot = r.unsupported[0].slot;
       if (this.phase === 'confirm') return this.confirm(unsupportedMsg, { outcome: 'unsupported', mood: 'confused' });
@@ -743,10 +827,18 @@ BB.Dialogue = (function () {
       return re;
     }
 
+    // The user repeated something we already have ("No, I want the iced latte"): agree and move on.
+    if (!res.problems.length && this.repeatsOrder(r)) {
+      this.fails = 0;
+      if (this.phase === 'confirm') return this.confirm('Yes, that’s already in your order.', { outcome: 'ok', short: true });
+      return this.continueFrom('Yes, I’ve got ' + this.describeDrink() + '.', { outcome: 'ok', short: true });
+    }
+
     if (res.problems.length) {
       this.fails++;
       var voice = meta.mode === 'voice';
-      var lead = voice ? 'I heard \u201c' + r.raw + '\u201d. ' : '';
+      // A time we understood but can't use is named in the message itself, so no need to echo the sentence.
+      var lead = voice && !(r.time && r.time.time) ? 'I heard \u201c' + r.raw + '\u201d. ' : '';
       return this.ask(this.current || this.nextSlot(), lead + res.problems.join(' '), {
         outcome: 'invalid', mood: 'confused', short: true, heardCheck: voice ? { text: r.raw } : null
       });
@@ -755,6 +847,51 @@ BB.Dialogue = (function () {
     if (r.vagueCoffee && (this.current === 'drink' || !this.order.drink)) return this.whichCoffee('');
 
     return this.notUnderstood(r, meta);
+  };
+
+  /* "Hey, how's it going?" */
+  Dialogue.prototype.smallTalk = function (kind) {
+    var line = kind === 'howareyou' ? 'I’m doing well, thanks for asking!'
+      : kind === 'thanks' ? 'You’re welcome!' : 'Hi there!';
+    if (this.phase === 'confirm') return this.confirm(line, { outcome: 'smalltalk', short: true });
+    return this.ask(this.current || this.nextSlot() || 'drink', line, { outcome: 'smalltalk', short: true });
+  };
+
+  /* What most people choose, offered as a yes/no suggestion. */
+  var SUGGESTIONS = {
+    drink: ['latte', 'Our most popular drink is the latte. Would you like one?'],
+    size: ['medium', 'Most people go for a medium. Would you like that?'],
+    temp: ['hot', 'Most people have it hot, but iced is great too. Shall I make it hot?'],
+    milk: ['whole milk', 'Whole milk is the classic, and oat is the most popular dairy-free choice. Shall I go with whole milk?'],
+    extras: ['vanilla', 'Vanilla syrup is the favourite add-on. Would you like it?'],
+    quantity: ['1', 'Shall I make it just one?'],
+    pickup: ['as soon as possible', 'Most people pick it up as soon as it’s ready, in about 10 minutes. Shall I do that?'],
+    payment: ['card', 'Most people pay by card at pickup. Is that okay?']
+  };
+  Dialogue.prototype.suggest = function () {
+    var slot = this.current || this.nextSlot() || 'drink';
+    var s = SUGGESTIONS[slot];
+    if (!s) return this.ask(slot, 'That one’s up to you!', { outcome: 'suggest', short: true });
+    this.pending = { type: 'suggest', slot: slot, value: s[0] };
+    return this.reply(s[1], {
+      outcome: 'suggest', quick: [{ label: 'Yes, please', value: 'Yes' }].concat(this.quickFor(slot).slice(0, 4))
+    });
+  };
+
+  /* "How much is a latte?" / "What's the difference between small and large?" */
+  Dialogue.prototype.prices = function (r) {
+    var drinkId = r.values.drink || this.order.drink;
+    var d = drinkId ? BB.option('drink', drinkId) : null;
+    var parts = [];
+    if (d && !r.conflicts.size) parts.push('A small ' + d.label.toLowerCase() + ' is ' + money(d.price) + '.');
+    else if (!r.conflicts.size) parts.push('Drinks start at ' + money(2.95) + ' for a small tea, and a small latte is ' + money(4.75) + '.');
+    parts.push('Medium adds 60 cents and large adds ' + money(1.10) + '.');
+    if (r.conflicts.size || /\bsize|small|medium|large\b/.test(r.text)) parts.push('Small is about 12 ounces, medium 16 and large 20.');
+    if (/\b(milk|oat|almond)\b/.test(r.text) || this.current === 'milk') parts.push('Oat or almond milk is ' + money(0.70) + ' extra.');
+    if (/\b(extra|syrup|shot|vanilla|caramel|whip)/.test(r.text) || this.current === 'extras') parts.push('Syrups are 60 cents, an extra shot is ' + money(1.00) + ' and whipped cream is 50 cents.');
+    var line = parts.join(' ');
+    if (this.phase === 'confirm') return this.confirm(line, { outcome: 'info', short: true });
+    return this.ask(this.current || this.nextSlot() || 'drink', line, { outcome: 'info', short: true });
   };
 
   Dialogue.prototype.whichCoffee = function (prefix) {
@@ -778,6 +915,12 @@ BB.Dialogue = (function () {
 
   Dialogue.prototype.notUnderstood = function (r, meta, lead) {
     this.fails++;
+    if (this.phase === 'confirm') {
+      var h = meta.mode === 'voice' ? 'I heard \u201c' + r.raw + '\u201d, but I’m not sure what you meant. ' : 'Sorry, I didn’t catch that. ';
+      return this.confirm(h + 'Just say yes to place it, or tell me what to change.', {
+        outcome: 'not_understood', mood: 'confused', short: true, heardCheck: meta.mode === 'voice' ? { text: r.raw } : null
+      });
+    }
     var slot = this.current || this.nextSlot() || 'drink';
     var heard = meta.mode === 'voice' ? 'I heard “' + r.raw + '”, but I’m not sure what you meant.' : (lead || 'Sorry, I didn’t understand that.');
     if (meta.mode === 'voice' && lead) heard = lead + ' I heard “' + r.raw + '”.';

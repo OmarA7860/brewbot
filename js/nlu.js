@@ -189,6 +189,12 @@ BB.NLU = (function () {
         ampm = words[3] || null;
       }
     }
+    if (hour === null) {
+      // Speech often writes 9:35 as "935" (or "1130").
+      var compact = t.match(/^\s*(?:(?:at|around|by|for|maybe|um|uh|like)\s+)*(\d{1,2})(\d{2})\s*(am|pm)?\s*$/) ||
+        t.match(/\b(?:at|around|by)\s+(\d{1,2})(\d{2})\s*(am|pm)?\b/);
+      if (compact) { hour = parseInt(compact[1], 10); min = parseInt(compact[2], 10); ampm = compact[3] || null; }
+    }
     if (hour === null || hour > 23 || min > 59) return { error: 'unclear' };
     if (/half past/.test(t)) min = 30;
     if (/quarter past/.test(t)) min = 15;
@@ -215,6 +221,7 @@ BB.NLU = (function () {
 
   function validateTime(d, now) {
     var earliest = new Date(now.getTime() + (BB.SHOP.prepMinutes - 1) * 60000);
+    if (d < now) return { error: 'passed', time: d };
     if (d < earliest) return { error: 'too_soon', time: d };
     if (d.getHours() < BB.SHOP.opensAt) return { error: 'not_open', time: d };
     if (d.getHours() > BB.SHOP.closesAt || (d.getHours() === BB.SHOP.closesAt && d.getMinutes() > 0)) return { error: 'closed', time: d };
@@ -222,20 +229,33 @@ BB.NLU = (function () {
     return { time: d };
   }
 
-  /* Pull a first name out of answers like "it's Maya" or "my name is Maya Patel". */
+  /*
+   * Pull a first name out of answers like "it's Maya", "my name is Maya Patel",
+   * "put Sam as the first name" or "just Sam". Returns null for words that
+   * are clearly not a name ("that's correct", "yes").
+   */
+  var NOT_A_NAME = /^(no|yes|yeah|yep|nope|okay|ok|sure|right|correct|that's|thats|that|this|it|it's|its|what|why|how|um|uh|hmm|the|a|an|i|me|my|and|is|just|put|please|thanks|thank|hello|hi|hey|can|could|would|i'd|i'll|we|you|they|he|she|name|first|sorry|wait|so|well|like|um|oh|for|under|as|to|be|do|not)$/i;
   function parseName(raw) {
-    var t = String(raw).trim().replace(/[.!?,]+$/g, '');
-    t = t.replace(/^(hi|hey|hello)[, ]+/i, '')
-      .replace(/^(my name is|my name's|name is|name's|it's|it is|i'm|i am|im|this is|call me|put it under|under|you can call me|the name is|for)\s+/i, '')
-      .replace(/^(the name|name)\s+/i, '');
-    var parts = t.split(/\s+/).filter(Boolean);
+    var t = String(raw).trim().replace(/[.!?,]+$/g, '').replace(/\s+/g, ' ');
+    t = t.replace(/^((hi|hey|hello|um|uh|so|okay|ok|oh|yeah|sure)[, ]+)+/i, '');
+    // endings: "... as the first name", "... for the name", "... please"
+    t = t.replace(/\s+(as|for|on|under)\s+(the|my|your|our)?\s*(first\s+)?name\b.*$/i, '')
+      .replace(/\s+(on it|on the order|for the order|on the cup|please|thanks|thank you)$/i, '');
+    // beginnings: "put", "just", "my name is", "can you put it under" ...
+    var LEAD = /^(can you|could you|you can|please|just|only|put|write|use|make it|name it|call it|put down|put it under|put it down as|it's under|it is under|under|it's for|it is for|for|my first name is|first name is|my first name's|my name is|my name's|name is|name's|the name is|the name's|it's|it is|i'm|i am|im|this is|call me|you can call me|the name|name|first name|down as|as|it)\s+/i;
+    for (var i = 0; i < 4 && LEAD.test(t); i++) t = t.replace(LEAD, '');
+    var parts = t.split(/\s+/).filter(Boolean).map(function (p) { return p.replace(/[^A-Za-zÀ-ÿ'-]/g, ''); }).filter(Boolean);
+    // "Sam Sam" (heard twice) is one name
+    parts = parts.filter(function (p, i) { return i === 0 || p.toLowerCase() !== parts[i - 1].toLowerCase(); });
     if (!parts.length) return null;
-    var first = parts[0].replace(/[^A-Za-zÀ-ÿ'-]/g, '');
-    if (first.length < 2 || first.length > 20) return null;
-    if (/^(no|yes|nope|yeah|okay|ok|what|why|um|uh|hmm|the|a|an|i|me|my|and|is)$/i.test(first)) return null;
+    var first = parts[0];
+    if (first.length < 2 || first.length > 20 || NOT_A_NAME.test(first)) return null;
+    var lower = ' ' + first.toLowerCase() + ' ';
+    if (PHRASES.some(function (p) { p.re.lastIndex = 0; return p.phrase.indexOf(' ') === -1 && p.re.test(lower); })) return null;
     return {
       name: first.charAt(0).toUpperCase() + first.slice(1).toLowerCase(),
-      hadLastName: parts.length > 1 && /^[A-Za-z'-]+$/.test(parts[1])
+      hadLastName: parts.length > 1 && /^[A-Za-z'-]+$/.test(parts[1]) && !NOT_A_NAME.test(parts[1]),
+      words: parts.length
     };
   }
 
@@ -265,8 +285,17 @@ BB.NLU = (function () {
     return text;
   }
 
+  /* Phrases that mean something different from their separate words. */
+  function rephrase(t) {
+    return t
+      // "a shot / pump / splash of vanilla" is syrup, not an extra espresso shot
+      .replace(/\b(?:an? |one |two |a couple of |some )?(?:shots?|pumps?|splash(?:es)?|dash(?:es)?|squirts?) of (vanilla|caramel)(?: syrup)?\b/g, ' $1 syrup ')
+      // "a shot of espresso" is an extra shot
+      .replace(/\b(?:an? |one )?(?:shots?) of espresso\b/g, ' extra shot ');
+  }
+
   function understand(rawText, currentSlot, now) {
-    var text = fixSoundalike(normalize(rawText), currentSlot);
+    var text = rephrase(fixSoundalike(normalize(rawText), currentSlot));
     var result = {
       raw: rawText, text: text.trim(),
       values: {}, extras: [], conflicts: {}, unsupported: [],
@@ -290,10 +319,12 @@ BB.NLU = (function () {
 
     // Pickup time is only looked for when it is being asked about, or when
     // the message clearly contains a time ("at 3 pm", "in 20 minutes").
-    var looksLikeTime = /\b(\d{1,2}(:\d{2})?\s*(am|pm)|in \d+ ?(min|minutes|hours?)|asap|as soon as possible|noon|half an hour)\b/.test(text);
-    if (currentSlot === 'pickup' || looksLikeTime) {
+    var looksLikeTime = /\b(\d{1,2}(:\d{2})?\s*(am|pm)|\d{1,2}:\d{2}|in \d+ ?(min|minutes|hours?)|in (a|an|half an?|ten|fifteen|twenty|thirty) (minutes?|hour)|asap|as soon as possible|noon|half an hour|pick (it|them) up (at|in|around))\b/.test(text);
+    // A bare "935" while being asked how many is a time (9:35), not 935 drinks.
+    var bareClock = currentSlot === 'quantity' && /^\s*\d{3,4}\s*$/.test(text) && parseInt(text, 10) > BB.SHOP.maxQuantity * 10;
+    if (currentSlot === 'pickup' || looksLikeTime || bareClock) {
       var time = parseTime(text, now);
-      if (!time.error || currentSlot === 'pickup') result.time = time;
+      if (!time.error || currentSlot === 'pickup' || ((looksLikeTime || bareClock) && time.error !== 'unclear')) result.time = time;
     }
 
     // Menu words
@@ -324,8 +355,33 @@ BB.NLU = (function () {
     // "coffee" on its own does not say which drink
     if (!result.values.drink && !result.conflicts.drink && /\bcoffees?\b/.test(text)) result.vagueCoffee = true;
 
-    var qty = findQuantity(scan.withoutUnsupported, currentSlot);
-    if (qty !== null) result.values.quantity = qty;
+    // Numbers that are part of a time ("in 20 minutes", "at 3:30", "3 pm") are not quantities.
+    var noTimes = scan.withoutUnsupported
+      .replace(/\b(in|for|about|around)?\s*\d+\s*(minutes?|mins?|hours?|hrs?)\b/g, ' ')
+      .replace(/\b\d{1,2}(:\d{2})\s*(am|pm)?\b/g, ' ').replace(/\b\d{1,2}\s*(am|pm)\b/g, ' ')
+      .replace(/\b(at|by|around)\s+\d{1,4}\b/g, ' ');
+    var qty = bareClock ? null : findQuantity(noTimes, currentSlot);
+    var articleOnly = qty === 1 && !/\b(one|1|single|just one|only one)\b/.test(text);
+    if (qty !== null && !(articleOnly && (result.unsupported.length || !result.values.drink)) && !(articleOnly && currentSlot && currentSlot !== 'drink' && currentSlot !== 'quantity')) {
+      result.values.quantity = qty;
+    }
+
+    // Talk around the order: small talk, price questions and asking for a suggestion.
+    result.smalltalk = /^\s*(hi|hey|hello|hiya|good (morning|afternoon|evening)|yo|sup)\b.*\b(how are you|how's it going|hows it going|how are things|how you doing|how is your day|what's up|whats up)\b|^\s*(how are you|how's it going|hows it going|how you doing|what's up|whats up)\b/.test(text) ? 'howareyou'
+      : /^\s*(hi|hey|hello|hiya|good (morning|afternoon|evening))\s*(there|brewbot|bot)?\s*$/.test(text) ? 'hello'
+      : /^\s*(thanks|thank you|thx|cheers|ty)\b/.test(text) && !Object.keys(result.values).length ? 'thanks' : null;
+    result.priceQuestion = /\b(how much|price|prices|cost|costs|expensive|cheap|cheapest|difference between|what's the difference|whats the difference)\b/.test(text);
+    result.recommend = /\b(recommend|recommendation|suggest|suggestion|surprise me|what'?s (good|popular|best)|whats (good|popular|best)|most popular|what do (people|most people) (get|order)|your favou?rite|you pick|you choose|dealer'?s choice|up to you|i don'?t know|not sure|dunno)\b/.test(text);
+
+    // A name given while answering something else ("put Sam as the name")
+    if (currentSlot !== 'name' && /\b(my name is|my name's|my first name is|as the (first )?name|as my (first )?name|for the name|under the name|name it|call me|the name is|the name's)\b/.test(text)) {
+      var nm = parseName(rawText);
+      if (nm && nm.words <= 2) result.name = nm.name;
+    }
+
+    // Asking for a second, different drink (we take one kind of drink per order)
+    result.anotherDrink = /\b(another|second|2nd|different|separate|other) (drink|coffee|latte|tea|one|item|order of)\b|\badd (a|one) (drink|coffee)\b/.test(text) &&
+      result.command !== 'restart';
 
     // Bare "change" or "back" inside a sentence with real values is a correction, not a command.
     if (result.command === 'change' && !result.changeSlot && Object.keys(result.values).length) {

@@ -287,6 +287,126 @@ run('Repeat reads the full on-screen question', ['Latte', 'repeat'], function (d
   return p;
 });
 
+// ---------- Problems found in usability testing (P1) ----------
+function V(text) { return { text: text, mode: 'voice', confidence: 0.9 }; }
+var TO_PICKUP = ['Latte', 'Large', 'Iced', 'Whole', 'Vanilla syrup', '1'];
+var TO_NAME = TO_PICKUP.concat(['in 20 minutes']);
+
+run('P1: "a shot of vanilla" is vanilla syrup, not an extra shot', ['Latte', V('I want the large with less ice and a shot of vanilla.')], function (d, r) {
+  var p = [];
+  expect(JSON.stringify(d.order.extras) === '["vanilla"]', 'extras = vanilla only, got ' + JSON.stringify(d.order.extras), p);
+  expect(d.order.size === 'large', 'size large', p);
+  expect(/ask the barista/.test(r.text), 'explains ice changes are made at pickup', p);
+  return p;
+});
+run('P1: a name inside a sentence ("Put Sam Sam as the first name")', TO_NAME.concat([V('Put Sam Sam as the first name.')]), function (d, r) {
+  var p = [];
+  expect(/Sam\. Is that right/.test(r.text), 'asks to confirm Sam, got: ' + r.text, p);
+  return p;
+});
+run('P1: "Just Sam" then "Yes" saves Sam', TO_NAME.concat([V('Just Sam.'), V('Yes.')]), function (d, r) {
+  var p = [];
+  expect(d.order.name === 'Sam', 'name Sam, got ' + d.order.name, p);
+  return p;
+});
+run('P1: "That\'s correct" is never saved as a name', TO_NAME.concat([V("That's correct.")]), function (d, r) {
+  var p = [];
+  expect(!d.order.name, 'no name saved', p);
+  expect(/still need a first name/.test(r.text), 'asks for the name again', p);
+  return p;
+});
+run('P1: "935" is understood as 9:35 and explained (after closing)', TO_PICKUP.concat([V('935.')]), function (d, r) {
+  var p = [];
+  expect(/9:35 pm is after we close/.test(r.text) && /Any time from/.test(r.text), 'names 9:35 pm and the valid window, got: ' + r.text, p);
+  return p;
+});
+run('P1: a time that already passed says so and gives the window', TO_PICKUP.concat([V('Can I pick it up at 1:30?')]), function (d, r) {
+  var p = [];
+  expect(/1:30 pm has already passed/.test(r.text) && /Any time from 2:30 pm to 9:00 pm/.test(r.text), 'explains passed time, got: ' + r.text, p);
+  return p;
+});
+run('P1: a pickup time given while asked "how many" is still understood', ['Latte', 'Large', 'Iced', 'Whole', 'Vanilla syrup', V('Could I just pick it up in 20 minutes?')], function (d, r) {
+  var p = [];
+  expect(d.order.pickup && !d.order.pickup.asap, 'pickup saved', p);
+  expect(d.order.quantity === null, '"20 minutes" is not a quantity', p);
+  return p;
+});
+run('P1: Spanish latte is explained, with the closest option', ['Latte', V('I want the iced latte, a ice Spanish latte.')], function (d, r) {
+  var p = [];
+  expect(/don’t have a Spanish latte/.test(r.text), 'says no Spanish latte', p);
+  expect(d.order.quantity === null, '"a" is not read as a quantity', p);
+  return p;
+});
+run('P1: repeating the drink is agreed with, not "not understood"', ['Iced latte', V('No, I want the iced latte.')], function (d, r) {
+  var p = [];
+  expect(r.outcome === 'ok' && /Yes, I’ve got an iced latte/.test(r.text), 'agrees, got: ' + r.text, p);
+  return p;
+});
+run('P1: asking for another drink explains one kind per order', TO_NAME.concat(['Sam', V('Could I pay cash and could I also add another drink?')]), function (d, r) {
+  var p = [];
+  expect(d.order.payment === 'cash', 'cash saved', p);
+  expect(/one kind of drink per order/.test(r.text), 'explains the limit', p);
+  return p;
+});
+run('P1: a question at the final summary stays on the summary', TO_NAME.concat(['Sam', 'Card', V('Do you guys have an iced Spanish latte?')]), function (d, r) {
+  var p = [];
+  expect(d.phase === 'confirm' && /Spanish latte/.test(r.text) && /Should I place the order/.test(r.text), 'answers and keeps the summary, got: ' + r.text, p);
+  return p;
+});
+run('P1: something unclear at the summary does not jump back to the drink question', TO_NAME.concat(['Sam', 'Card', V('mumble mumble')]), function (d, r) {
+  var p = [];
+  expect(d.phase === 'confirm' && /Should I place the order/.test(r.text), 'still on the summary', p);
+  return p;
+});
+run('Acknowledgement describes the drink ("An iced latte")', ['iced latte'], function (d, r) {
+  var p = [];
+  expect(/An iced latte\./.test(r.text), 'natural acknowledgement, got: ' + r.text, p);
+  return p;
+});
+
+// ---------- Talking like a person ----------
+run('Small talk is answered, then back to the order', ['hey how\'s it going'], function (d, r) {
+  var p = [];
+  expect(/doing well/.test(r.text) && d.current === 'drink', 'friendly reply then asks drink', p);
+  return p;
+});
+run('Price question is answered', ['how much is a latte'], function (d, r) {
+  var p = [];
+  expect(/\$4\.75/.test(r.text), 'gives the latte price', p);
+  return p;
+});
+run('Size difference is explained', ['Latte', 'what\'s the difference between small and large'], function (d, r) {
+  var p = [];
+  expect(/12 ounces/.test(r.text) && d.current === 'size' && !d.order.size, 'explains sizes and keeps asking', p);
+  return p;
+});
+run('Recommendation can be accepted with "yes"', ['what do you recommend', 'yes'], function (d, r) {
+  var p = [];
+  expect(d.order.drink === 'latte', 'latte chosen from suggestion', p);
+  return p;
+});
+run('"Surprise me" for size suggests medium', ['Latte', 'surprise me', 'sure'], function (d, r) {
+  var p = [];
+  expect(d.order.size === 'medium', 'medium chosen', p);
+  return p;
+});
+run('A menu word is not taken as a name', TO_NAME.concat([V('Omar'), V('card')]), function (d, r) {
+  var p = [];
+  expect(!/Card\. Is that right/.test(r.text), 'does not confirm "Card" as a name', p);
+  return p;
+});
+run('"I\'d like a coffee" asks which coffee without saying "1 drink"', ["i'd like a coffee"], function (d, r) {
+  var p = [];
+  expect(!/1 drink/.test(r.text) && /Which kind of coffee/.test(r.text), 'asks which coffee', p);
+  return p;
+});
+
+run('Unclear time gives a real example time, never a raw date', TO_PICKUP.concat(['purple elephant']), function (d, r) {
+  var p = [];
+  expect(!/GMT|Thu|Nov/.test(r.text), 'no raw date in: ' + r.text, p);
+  return p;
+});
+
 // Pronunciation: the spoken copy says "mic" as a word, money and times naturally.
 (function () {
   var src = require('fs').readFileSync(__dirname + '/../js/speech.js', 'utf8');
