@@ -14,7 +14,7 @@ import os, sys, time
 from playwright.sync_api import sync_playwright
 
 URL = os.environ.get("BREWBOT_URL", "http://localhost:8123/index.html")
-OUT = os.path.join(os.path.dirname(__file__), "..", "docs", "screenshots", "test-run")
+OUT = os.path.join(os.path.dirname(__file__), "screenshots")
 os.makedirs(OUT, exist_ok=True)
 
 # Fake voice: window.__say(text) makes the next microphone session "hear" text.

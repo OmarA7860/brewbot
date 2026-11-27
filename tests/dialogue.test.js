@@ -299,6 +299,29 @@ run('P1: "a shot of vanilla" is vanilla syrup, not an extra shot', ['Latte', V('
   expect(/ask the barista/.test(r.text), 'explains ice changes are made at pickup', p);
   return p;
 });
+run('P4: "I wanna latte" is a latte, and "a vanilla shot" is syrup', [V('Yeah, I wanna latte medium sized. I would like it iced and put whole milk and for extras I would like a vanilla shot.')], function (d, r) {
+  var p = [];
+  expect(d.order.drink === 'latte', 'drink latte, got ' + d.order.drink, p);
+  expect(JSON.stringify(d.order.extras) === '["vanilla"]', 'extras = vanilla only, got ' + JSON.stringify(d.order.extras), p);
+  expect(!/don’t have/.test(r.text), 'no "we don’t have" message', p);
+  return p;
+});
+run('P4: "What?" says the question again more simply', ['latte', V('What?')], function (d, r) {
+  var p = [];
+  expect(/simpler/.test(r.text) && /size/i.test(r.text), 'explains and re-asks the size, got ' + r.text, p);
+  expect(d.order.drink === 'latte', 'keeps the drink', p);
+  return p;
+});
+run('P4: "in 15" and "like 20 minutes" are pickup times', TO_PICKUP.concat([V('like 20 minutes')]), function (d, r) {
+  var p = [];
+  expect(d.order.pickup && d.current !== 'pickup', 'pickup saved, got ' + r.text, p);
+  return p;
+});
+run('P4: "no thanks I’m good" means no extras', ['medium hot latte with whole milk', 'no thanks I’m good'], function (d, r) {
+  var p = [];
+  expect(JSON.stringify(d.order.extras) === '["none"]', 'extras none, got ' + JSON.stringify(d.order.extras), p);
+  return p;
+});
 run('P1: a name inside a sentence ("Put Sam Sam as the first name")', TO_NAME.concat([V('Put Sam Sam as the first name.')]), function (d, r) {
   var p = [];
   expect(/Sam\. Is that right/.test(r.text), 'asks to confirm Sam, got: ' + r.text, p);

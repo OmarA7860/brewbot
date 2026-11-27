@@ -388,6 +388,16 @@ BB.Dialogue = (function () {
     return r;
   };
 
+  /* "What?" or "I'm lost": say where we are, then ask the one thing still needed, simply. */
+  Dialogue.prototype.explainAgain = function () {
+    if (this.phase === 'confirm') return this.confirm('Sorry, let me say that more clearly.');
+    if (this.phase === 'done' || this.phase === 'welcome') return this.help();
+    var slot = this.current || 'drink';
+    var o = this.order;
+    var have = (o.drink || o.size || o.temp || o.milk || (o.extras && o.extras.length)) ? this.describeDrink() : '';
+    return this.ask(slot, 'Sorry, let me make that simpler.' + (have ? ' So far I have ' + have + '.' : ''), { outcome: 'help', mood: 'neutral' });
+  };
+
   /* Called by the app when nobody has answered for a while. Only nudges once per question. */
   Dialogue.prototype.nudge = function () {
     if (this.nudged || this.phase === 'done' || this.phase === 'welcome') return null;
@@ -565,6 +575,7 @@ BB.Dialogue = (function () {
     }
     if (r.command === 'back') return this.back();
     if (r.command === 'help' && !this.isUseful(r)) return this.help();
+    if (r.command === 'clarify') return this.explainAgain();
 
     // Sensitive information is never needed
     if (r.privacy) {

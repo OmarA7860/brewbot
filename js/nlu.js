@@ -75,7 +75,8 @@ BB.NLU = (function () {
      'just like want get have of and or with me i please that this can could would i\'d i\'ll it is my our big hot iced ice cold ' +
      'warm medium small large regular extra double single quick tall fancy special fresh new favourite favorite ' +
      'skinny light sweet sweetened unsweetened strong weak half whole morning afternoon second first last more less make made ' +
-     'do you guys have sell is there them those these what which how much 2 3 4 5 6 7 8 9 10 1').split(' ').forEach(function (w) { set[w] = true; });
+     'do you guys have sell is there them those these what which how much 2 3 4 5 6 7 8 9 10 1 ' +
+     'wanna gonna gotta gimme lemme need needs grab order take give let id im to for in on at so yeah yes yep ok okay um uh also then maybe be will should get go try drink cup thanks hi hey hello').split(' ').forEach(function (w) { set[w] = true; });
     return set;
   })();
   var DRINK_HINTS = {
@@ -150,6 +151,8 @@ BB.NLU = (function () {
   }
 
   var COMMANDS = [
+    // "What?", "huh", "I'm lost": the last reply was unclear, so say the question again more simply
+    { name: 'clarify', re: /^\s*(?:(?:um+|uh+|wait|sorry|bro|bruh|yo|ok|okay|so)\s+)*(?:what|wut|wat|huh|eh|sorry|what now|what do you mean|what does that mean|what are you (?:saying|talking about)|i'?m (?:so )?(?:lost|confused)|i am (?:so )?(?:lost|confused)|(?:so )?(?:lost|confused)|i don'?t (?:understand|get it|get that)|i didn'?t (?:understand|get (?:it|that))|that makes no sense|what is that)(?:\s+(?:bro|bruh|man|dude|lol|now|then|exactly))*\s*$/ },
     { name: 'slower',  re: /\b(slow down|(talk|speak|go|say it) (a bit |a little |more )?slow(er|ly)?|slower( please)?|too fast|more slowly)\b/ },
     { name: 'faster',  re: /\b(speed up|(talk|speak|go) (a bit |a little )?faster|faster( please)?|too slow|more quickly)\b/ },
     { name: 'restart', re: /\b(start over|start again|restart|reset|new order|another order|cancel( my| the| this)? order|cancel( it| that)?\s*$|clear (it|everything|the order))\b/ },
@@ -167,8 +170,8 @@ BB.NLU = (function () {
     pickup: 'pickup', 'pickup time': 'pickup', time: 'pickup', name: 'name', payment: 'payment', pay: 'payment', paying: 'payment'
   };
 
-  var YES_RE = /^\s*(yes|yeah|yea|yep|yup|ya|sure|correct|right|that'?s (right|correct|it)|that is (right|correct)|confirm(ed)?|looks (good|great|right)|perfect|place (it|the order|my order)|ok(ay)?|sounds (good|great)|do it|absolutely|go ahead|all good|exactly)\b/;
-  var NO_RE = /^\s*(no|nope|nah|not quite|not really|wrong|that'?s (wrong|not right)|incorrect|negative)\b/;
+  var YES_RE = /^\s*(?:(?:wait|oh|um+|uh+|actually|hmm+|well|so|ok|okay|ah)[,.!]?\s+)*(yes|yeah|yea|yep|yup|ya|sure|correct|right|that'?s (right|correct|it)|that is (right|correct)|confirm(ed)?|looks (good|great|right)|perfect|awesome|great|lovely|excellent|definitely|alright|place (it|the order|my order)|ok(ay)?|sounds (good|great)|do it|absolutely|go ahead|all good|exactly)\b/;
+  var NO_RE = /^\s*(?:(?:wait|oh|um+|uh+|actually|hmm+|well|so|ok|okay|ah)[,.!]?\s+)*(no|nope|nah|not quite|not really|wrong|that'?s (wrong|not right)|incorrect|negative)\b/;
   var CORRECTION_RE = /\b(actually|instead|make (it|that|them)|change (it|that) to|i meant|i mean|no wait|switch (it|that) to|rather|not .+ but)\b/;
 
   /* Phone numbers, emails, addresses or card numbers are not needed. */
@@ -191,11 +194,14 @@ BB.NLU = (function () {
     if (/\b(asap|a s a p|as soon as (possible|you can)|right now|now|soon|right away|whenever|earliest|quick(ly)?|immediately|straight away|ready)\b/.test(t)) {
       return { asap: true };
     }
-    var m = t.match(/\bin (?:about |around )?(\d+|a|an|half an?|one|two|five|ten|fifteen|twenty|thirty|forty|forty five|forty-five|sixty)\s*(minutes?|mins?|hours?|hrs?)\b/);
+    var m = t.match(/\b(?:in )?(?:like |about |around |roughly |maybe |approximately |approx )?(\d+|a|an|half an?|one|two|five|ten|fifteen|twenty|twenty five|thirty|forty|forty five|forty-five|sixty)\s*(minutes?|mins?|hours?|hrs?)\b/);
+    // "in 15" with no unit means minutes (only for sensible wait times)
+    var bare = !m && t.match(/\bin (?:like |about |around |roughly |maybe )?(\d{1,2})\s*$/);
+    if (bare && +bare[1] >= 5 && +bare[1] <= 90) m = [bare[0], bare[1], 'minutes'];
     if (m) {
       var word = m[1];
       var amount = /^\d+$/.test(word) ? parseInt(word, 10)
-        : ({ 'a': 1, 'an': 1, 'one': 1, 'two': 2, 'five': 5, 'ten': 10, 'fifteen': 15, 'twenty': 20, 'thirty': 30, 'forty': 40, 'forty five': 45, 'forty-five': 45, 'sixty': 60 })[word];
+        : ({ 'a': 1, 'an': 1, 'one': 1, 'two': 2, 'five': 5, 'ten': 10, 'fifteen': 15, 'twenty': 20, 'thirty': 30, 'forty': 40, 'forty five': 45, 'forty-five': 45, 'sixty': 60, 'twenty five': 25 })[word];
       if (/^half/.test(word)) { amount = 30; m[2] = 'minutes'; }
       var minutes = /^h/.test(m[2]) ? amount * 60 : amount;
       return validateTime(new Date(now.getTime() + minutes * 60000), now);
@@ -324,6 +330,10 @@ BB.NLU = (function () {
       .replace(/\bspanish (law|laws|lot|lotte|lottie|lotty|la tay|late|lady|light)\b/g, 'spanish latte')
       // "a shot / pump / splash of vanilla" is syrup, not an extra espresso shot
       .replace(/\b(?:an? |one |two |a couple of |some )?(?:shots?|pumps?|splash(?:es)?|dash(?:es)?|squirts?) of (vanilla|caramel)(?: syrup)?\b/g, ' $1 syrup ')
+      // "a vanilla shot" / "caramel pump" is syrup too
+      .replace(/\b(?:an? |one |two )?(vanilla|caramel) (?:shots?|pumps?|splash(?:es)?|squirts?)\b/g, ' $1 syrup ')
+      // casual speech: "I wanna latte" means "I want a latte"
+      .replace(/\bwanna\b/g, 'want a').replace(/\bgimme\b/g, 'give me').replace(/\blemme (?:get|have)\b/g, 'i want')
       // "a shot of espresso" is an extra shot
       .replace(/\b(?:an? |one )?(?:shots?) of espresso\b/g, ' extra shot ');
   }
@@ -339,7 +349,7 @@ BB.NLU = (function () {
     'coffee syrup with milk please large medium small iced cappuccino americano'.split(' ').forEach(function (w) { set[w] = true; });
     return Object.keys(set);
   })();
-  var COMMON = /^(back|help|stop|menu|undo|redo|over|again|wait|hold|done|pause|start|reset|restart|slow|slower|fast|faster|repeat|cancel|skip|next|plain|cool|fine|same|both|either|neither|first|second|last|call|take|keep|hard|easy|best|most|love|mine|ours|work|home|late|early|hello|black|blank|bake|lack|track|bank|park|mark|mike|told|tell|said|says|went|gone|come|came|look|went|play|play|game|food|free|full|half|zero|four|five|nine|eight|seven|three|twelve|eleven|twenty|thirty|forty|fifty|hundred|dollar|dollars|cents|price|prices|cost|order|orders|drink|drinks|coffee|coffees|cream|sugar|honey|water|juice|thing|things|stuff|other|another|every|everything|nothing|something|anything|which|where|while|whole|watch|watching|youtube|phone|music|video|people|person|friend|guys|they're|we're|you're|it's|i'm|i've|can't|don't|won't|isn't|aren't|wasn't|weren't|with|have|give|want|would|could|like|please|thanks|that|this|what|when|just|make|order|their|there|they|them|then|than|from|your|some|more|less|much|many|time|name|pick|will|only|also|okay|yeah|sure|cash|card|none|actually|instead|change|minutes|hour|hours|soon|possible|thank|right|wrong|good|great|nice|maybe|well|about|around|after|before|today|tonight|morning|later|now|here|still|need|know|think|guess|really|sorry)$/;
+  var COMMON = /^(perfect|awesome|amazing|lovely|excellent|fantastic|correct|exactly|absolutely|definitely|alright|nope|yep|yup|nah|wait|hmm|back|help|stop|menu|undo|redo|over|again|wait|hold|done|pause|start|reset|restart|slow|slower|fast|faster|repeat|cancel|skip|next|plain|cool|fine|same|both|either|neither|first|second|last|call|take|keep|hard|easy|best|most|love|mine|ours|work|home|late|early|hello|black|blank|bake|lack|track|bank|park|mark|mike|told|tell|said|says|went|gone|come|came|look|went|play|play|game|food|free|full|half|zero|four|five|nine|eight|seven|three|twelve|eleven|twenty|thirty|forty|fifty|hundred|dollar|dollars|cents|price|prices|cost|order|orders|drink|drinks|coffee|coffees|cream|sugar|honey|water|juice|thing|things|stuff|other|another|every|everything|nothing|something|anything|which|where|while|whole|watch|watching|youtube|phone|music|video|people|person|friend|guys|they're|we're|you're|it's|i'm|i've|can't|don't|won't|isn't|aren't|wasn't|weren't|with|have|give|want|would|could|like|please|thanks|that|this|what|when|just|make|order|their|there|they|them|then|than|from|your|some|more|less|much|many|time|name|pick|will|only|also|okay|yeah|sure|cash|card|none|actually|instead|change|minutes|hour|hours|soon|possible|thank|right|wrong|good|great|nice|maybe|well|about|around|after|before|today|tonight|morning|later|now|here|still|need|know|think|guess|really|sorry)$/;
   function distance(a, b) {
     var d = [], i, j;
     for (i = 0; i <= a.length; i++) { d[i] = [i]; }
@@ -368,6 +378,8 @@ BB.NLU = (function () {
 
   function understand(rawText, currentSlot, now) {
     var text = rephrase(fixSoundalike(' ' + fixTypos(normalize(rawText), currentSlot) + ' ', currentSlot));
+    // At the extras question, "I'm good" / "that's it" means no extras
+    if (currentSlot === 'extras') text = text.replace(/\b(?:no,? )?(?:thanks?,? )?(?:i'?m|im|i am) (?:good|fine|ok(?:ay)?|alright|all good)(?: thanks?| thank you)?\b|\bthat'?s (?:it|all|fine)\b|\bnothing else\b|\bjust (?:that|the drink)\b/g, ' no extras ');
     var result = {
       raw: rawText, text: text.trim(),
       values: {}, extras: [], conflicts: {}, unsupported: [],
@@ -385,8 +397,9 @@ BB.NLU = (function () {
       result.command = 'change';
       result.changeSlot = change[2] ? CHANGE_SLOT_MAP[change[2].replace(/-/g, ' ').trim()] || CHANGE_SLOT_MAP[change[2]] || null : null;
     }
-    result.yes = YES_RE.test(text);
-    result.no = NO_RE.test(text) && !result.yes;
+    // "okay wait, no" is a no, even though it starts with "okay"
+    result.no = NO_RE.test(text) && !/^\s*(yes|yeah|yep|yup|sure)\b/.test(text);
+    result.yes = YES_RE.test(text) && !result.no;
     result.correction = CORRECTION_RE.test(text);
 
     // Pickup time is only looked for when it is being asked about, or when
