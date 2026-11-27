@@ -449,3 +449,69 @@ kbd { font: 12px var(--sans); background: #fff; border: 1px solid var(--line); b
 }
 .tracker.cancelled .tr-steps li.now::before { border-color: #c9b8a8; background: #c9b8a8; box-shadow: none; }
 .tracker.cancelled .tr-steps li.now { font-weight: 400; color: var(--ink-soft); }
+
+/* ---------- drink pictures (drinkart.js) ---------- */
+.drink-art { display: block; width: 100%; height: 100%; }
+@media (prefers-reduced-motion: no-preference) {
+  .drink-art .da-steam path { animation: da-steam 2.8s ease-in-out infinite; transform-box: fill-box; }
+  .drink-art .da-steam path:nth-child(2) { animation-delay: .5s; }
+  .drink-art .da-steam path:nth-child(3) { animation-delay: 1s; }
+}
+@keyframes da-steam { 0%, 100% { opacity: .35; transform: translateY(2px); } 50% { opacity: .9; transform: translateY(-2px); } }
+
+/* Drink buttons with a picture, name and price */
+.quick-replies.with-pictures { gap: 10px; }
+.chip.chip-drink {
+  display: grid; grid-template-rows: 54px auto auto; justify-items: center; gap: 2px;
+  width: 104px; padding: 8px 6px 9px; border-radius: 16px; border: 1.5px solid var(--line);
+  background: #fff; box-shadow: var(--shadow); transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.chip.chip-drink .drink-art { width: 54px; height: 54px; }
+.chip.chip-drink .cd-name { font-size: 14px; font-weight: 700; color: var(--espresso); line-height: 1.15; }
+.chip.chip-drink .cd-price { font-size: 13px; font-weight: 600; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.chip.chip-drink:hover, .chip.chip-drink:focus-visible { background: var(--foam); color: var(--espresso); border-color: var(--caramel); transform: translateY(-2px); box-shadow: 0 8px 18px rgba(60, 35, 20, .12); }
+
+/* Welcome screen lineup */
+.lineup-label { margin: 22px 0 8px; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.lineup { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.lineup-item {
+  display: grid; justify-items: center; gap: 4px; width: 86px; padding: 8px 4px 10px;
+  border: 1.5px solid transparent; border-radius: 14px; background: transparent; color: var(--espresso);
+  font: 600 13px var(--sans); cursor: pointer; transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.lineup-item .drink-art { width: 62px; height: 62px; }
+.lineup-item:hover, .lineup-item:focus-visible { background: var(--panel); border-color: var(--line); transform: translateY(-2px); }
+
+/* Menu panel with pictures */
+#menuModal { width: min(900px, calc(100vw - 32px)); }
+.menu-cards { list-style: none; margin: 6px 0 18px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.menu-card {
+  display: grid; grid-template-rows: 96px 1fr auto; gap: 8px; padding: 14px; text-align: center;
+  background: #fff; border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+}
+.menu-card .mc-art { width: 96px; height: 96px; margin: 0 auto; }
+.menu-card h3 { margin: 0; font-family: var(--serif); font-size: 19px; color: var(--espresso); }
+.menu-card .mc-price { margin: 2px 0 4px; font-weight: 700; color: var(--caramel); font-variant-numeric: tabular-nums; }
+.menu-card .mc-desc { margin: 0; font-size: 13.5px; line-height: 1.4; color: var(--ink-soft); }
+.mc-order {
+  justify-self: center; border: 1.5px solid var(--espresso); background: var(--espresso); color: #fff;
+  border-radius: 999px; padding: 6px 14px; font: 600 13.5px var(--sans); cursor: pointer;
+}
+.mc-order:hover, .mc-order:focus-visible { background: var(--espresso-dark); }
+.menu-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.menu-col { background: var(--foam); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px 6px; }
+.menu-col h3 { margin: 2px 0 6px; font-size: 15px; color: var(--espresso); }
+.menu-col ul { list-style: none; margin: 0; padding: 0; }
+.menu-col li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px dashed var(--line); font-size: 14.5px; }
+.menu-col li:last-child { border-bottom: 0; }
+.menu-col li span:last-child { color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.menu-note { margin: 12px 0 4px; font-size: 14px; color: var(--ink-soft); }
+
+/* Fit everything on laptop screens without scrolling the left panel */
+@media (max-height: 960px) {
+  .avatar { width: 158px; height: 158px; }
+  .try-saying li { font-size: 14px; }
+}
+.welcome { max-width: 580px; }
+.chip.chip-drink { width: 92px; }
+.quick-replies.with-pictures { gap: 8px; }

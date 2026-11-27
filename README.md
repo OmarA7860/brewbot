@@ -19,6 +19,7 @@ confirms everything before placing the order. Made for the SOFE4850 UX Project a
 | 🎙️ **Talk, type or tap** | Press **Talk** (or `Ctrl + M`) and speak, type and press Enter, or tap an option. Mix them freely. |
 | 🧠 **Several details at once** | "Two large iced oat lattes with vanilla" fills five answers in one go. BrewBot only asks for the rest. |
 | 💬 **Talks like a barista** | Understands full sentences and forgives typos ("put Sam as the name", "a shot of vanilla", "935"), answers small talk, price and "do you have…" questions, names any drink it doesn't have and offers the closest one, and suggests the most popular choice if you say "surprise me". |
+| 🖼️ **Picture menu** | Every drink has its own illustration, on the Menu panel, the drink buttons and the welcome screen. Tap **Order this** or a favourite to start straight away. |
 | ☕ **Live drink preview** | A cartoon mug builds your drink as you answer: colour, size, steam or ice, milk, whipped cream, syrup and quantity. |
 | 👀 **Always shows its state** | The avatar's face shows when it is listening, thinking, speaking, confused, paused or done. It glows when it actually hears your voice and nods each time it saves an answer. |
 | ✏️ **Fix anything, anytime** | Say "actually, make it almond milk", click **Edit** on any row, or press **Back**. Nothing forces a restart. |
@@ -35,6 +36,8 @@ confirms everything before placing the order. Made for the SOFE4850 UX Project a
   &nbsp;&nbsp;
   <img src="docs/screenshots/order-tracker.png" alt="Order tracker" width="420">
 </p>
+
+<p align="center"><img src="docs/screenshots/menu.png" alt="Picture menu with every drink, its price and an Order this button" width="640"></p>
 
 <p align="center"><img src="docs/screenshots/avatar-states.png" alt="Avatar states: listening, thinking, speaking, confused, happy" width="640"></p>
 
@@ -99,6 +102,7 @@ js/nlu.js             Understanding: finds menu words, numbers, times, names and
 js/dialogue.js        Conversation manager: fills the 9 order details, checks answers, builds every reply
 js/speech.js          Voice input, natural-sounding voice output, voice choice and speed
 js/preview.js         Live drink preview
+js/drinkart.js        Drink pictures for the menu, drink buttons and welcome screen
 js/log.js             Usability test log (time, errors, retries) with CSV export
 js/app.js             Connects everything to the page: chat, avatar, buttons, order panel, tracker
 tests/                Automated tests

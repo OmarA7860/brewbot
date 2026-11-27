@@ -191,7 +191,7 @@ BB.Dialogue = (function () {
 
   Dialogue.prototype.quickFor = function (slot) {
     switch (slot) {
-      case 'drink': return BB.MENU.drink.map(function (d) { return { label: d.label, value: d.label }; });
+      case 'drink': return BB.MENU.drink.map(function (d) { return { label: d.label, value: d.label, icon: d.id, price: money(d.price) }; });
       case 'size': return BB.MENU.size.map(function (s) { return { label: s.label + (s.price ? ' (+' + money(s.price) + ')' : ''), value: s.label }; });
       case 'temp': return [{ label: 'Hot', value: 'Hot' }, { label: 'Iced', value: 'Iced' }];
       case 'milk': return BB.MENU.milk.map(function (m) { return { label: m.label + (m.price ? ' (+' + money(m.price) + ')' : ''), value: m.label }; });

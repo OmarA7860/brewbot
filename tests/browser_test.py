@@ -298,6 +298,24 @@ with sync_playwright() as p:
     check("library" in page2.locator("#findModal").inner_text(), "Find us panel opens")
     page2.locator("#findModal .modal-close").click()
 
+    # ---------- Pictures and shortcuts ----------
+    print("Pictures and shortcuts")
+    page4, errors4 = new_page(browser)
+    check(page4.locator("#lineup .lineup-item").count() == 5, "welcome screen shows 5 favourite drinks")
+    page4.locator("#lineup .lineup-item", has_text="Mocha").click()
+    page4.wait_for_function("document.querySelectorAll('.msg.user').length > 0", timeout=8000); wait_idle(page4)
+    check("Mocha" in page4.locator("#orderList").inner_text(), "tapping a favourite starts the order with that drink")
+    page4.click("#navMenu")
+    check(page4.locator(".menu-card").count() == 7 and page4.locator(".menu-card svg").count() == 7, "menu shows 7 drinks, each with a picture")
+    page4.locator(".mc-order[data-drink='Latte']").click()
+    page4.wait_for_function("document.querySelectorAll('.msg.user').length > 1", timeout=8000); wait_idle(page4)
+    check(page4.locator("#menuModal").is_hidden(), "Order this closes the menu")
+    page5, errors5 = new_page(browser)
+    page5.click("#startBtn"); wait_idle(page5)
+    check(page5.locator(".chip-drink").count() == 7 and page5.locator(".chip-drink svg").count() == 7, "drink buttons show a picture, name and price")
+    check(page5.locator(".chip-drink").first.get_attribute("aria-label") == "Latte, $4.75", "drink buttons have a clear spoken label")
+    check(not errors4 and not errors5, "no JavaScript errors with pictures: " + "; ".join(errors4 + errors5))
+
     # ---------- No voice support ----------
     ctx = browser.new_context(viewport={"width": 1366, "height": 800})
     ctx.add_init_script("delete window.webkitSpeechRecognition; delete window.SpeechRecognition;")

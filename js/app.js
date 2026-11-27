@@ -183,11 +183,32 @@
 
   function renderQuick(list) {
     el.quick.innerHTML = '';
+    var pictures = (list || []).some(function (q) { return q.icon; });
+    el.quick.classList.toggle('with-pictures', pictures);
     (list || []).forEach(function (q) {
       var b = makeButton(q.label, 'chip', function () { submit(q.value, 'button'); });
+      if (q.icon && BB.DrinkArt) {
+        // Drink buttons show the drink, its name and price (recognition rather than recall).
+        b.className = 'chip chip-drink';
+        b.innerHTML = BB.DrinkArt.svg(q.icon) + '<span class="cd-name"></span><span class="cd-price"></span>';
+        b.querySelector('.cd-name').textContent = q.label;
+        b.querySelector('.cd-price').textContent = q.price || '';
+        b.setAttribute('aria-label', q.label + (q.price ? ', ' + q.price : ''));
+      }
       b.disabled = ui.paused;
       el.quick.appendChild(b);
     });
+  }
+
+  /* Start an order with a drink already chosen (welcome lineup and Menu panel). */
+  function orderDrink(label) {
+    closeModal();
+    if (!ui.started || dialogue.phase === 'done') {
+      startOrder();
+      setTimeout(function () { submit(label, 'button'); }, 60);
+    } else {
+      submit(label, 'button');
+    }
   }
 
   /* ---------------- order panel ---------------- */
@@ -804,21 +825,52 @@
   }
 
   // The menu panel is built from menu.js, so it always matches what BrewBot accepts.
+  // Each drink has a picture, a short description, its price and an "Order this" button.
   function buildMenu() {
     var money = BB.Dialogue.money;
-    function section(title, items, priceFn) {
-      return '<table class="menu-table"><caption>' + title + '</caption>' + items.map(function (o) {
-        return '<tr><td>' + escapeHTML(o.label) + (o.icedOnly ? ' (iced only)' : '') + '</td><td>' + priceFn(o) + '</td></tr>';
-      }).join('') + '</table>';
+    var cards = BB.MENU.drink.map(function (d) {
+      return '<li class="menu-card">' +
+        '<div class="mc-art">' + (BB.DrinkArt ? BB.DrinkArt.svg(d.id) : '') + '</div>' +
+        '<div class="mc-text"><h3>' + escapeHTML(d.label) + '</h3>' +
+        '<p class="mc-price">' + money(d.price) + (d.icedOnly ? ' · iced only' : '') + '</p>' +
+        '<p class="mc-desc">' + escapeHTML(BB.DrinkArt ? BB.DrinkArt.describe(d.id) : '') + '</p></div>' +
+        '<button type="button" class="mc-order" data-drink="' + escapeHTML(d.label) + '" aria-label="Order a ' + escapeHTML(d.label.toLowerCase()) + '">Order this</button>' +
+        '</li>';
+    }).join('');
+    function list(title, items, priceFn) {
+      return '<div class="menu-col"><h3>' + title + '</h3><ul>' + items.map(function (o) {
+        return '<li><span>' + escapeHTML(o.label) + '</span><span>' + priceFn(o) + '</span></li>';
+      }).join('') + '</ul></div>';
     }
     $('menuBody').innerHTML =
-      section('Drinks', BB.MENU.drink, function (o) { return money(o.price); }) +
-      section('Sizes', BB.MENU.size, function (o) { return o.price ? '+' + money(o.price) : 'included'; }) +
-      section('Milk', BB.MENU.milk, function (o) { return o.price ? '+' + money(o.price) : 'free'; }) +
-      section('Extras', BB.MENU.extras.filter(function (e) { return e.id !== 'none'; }), function (o) { return '+' + money(o.price); }) +
-      '<p>All drinks come hot or iced (cold brew is iced only).</p>';
+      '<ul class="menu-cards">' + cards + '</ul>' +
+      '<div class="menu-cols">' +
+      list('Sizes', BB.MENU.size, function (o) { return o.price ? '+' + money(o.price) : 'included'; }) +
+      list('Milk', BB.MENU.milk, function (o) { return o.price ? '+' + money(o.price) : 'free'; }) +
+      list('Extras', BB.MENU.extras.filter(function (e) { return e.id !== 'none'; }), function (o) { return '+' + money(o.price); }) +
+      '</div><p class="menu-note">Every drink comes hot or iced, except cold brew, which is always iced.</p>';
+    Array.prototype.forEach.call(document.querySelectorAll('.mc-order'), function (b) {
+      b.addEventListener('click', function () { orderDrink(b.getAttribute('data-drink')); });
+    });
   }
   buildMenu();
+
+  // Welcome screen: tap a favourite to start the order with it (a shortcut; Start my order still works).
+  (function buildLineup() {
+    var box = $('lineup');
+    if (!box || !BB.DrinkArt) return;
+    [['latte', 'Latte', 'Latte'], ['coldbrew', 'Cold Brew', 'Cold Brew'], ['mocha', 'Mocha', 'Mocha'], ['chai', 'Chai Latte', 'Chai Latte'], ['cappuccino', 'Cappuccino', 'Cappuccino']]
+      .forEach(function (d) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'lineup-item';
+        b.innerHTML = BB.DrinkArt.svg(d[0]) + '<span></span>';
+        b.querySelector('span').textContent = d[1];
+        b.setAttribute('aria-label', 'Start an order with a ' + d[1].toLowerCase());
+        b.addEventListener('click', function () { orderDrink(d[2]); });
+        box.appendChild(b);
+      });
+  })();
 
   $('navMenu').addEventListener('click', function () { openModal('menuModal', $('navMenu')); });
   $('navFind').addEventListener('click', function () { openModal('findModal', $('navFind')); });
