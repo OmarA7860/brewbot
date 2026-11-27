@@ -128,7 +128,7 @@ The conversation logic has no screen or audio code in it, which is what makes it
 ## Tests
 
 ```bash
-node tests/dialogue.test.js        # 86 conversation tests, no browser needed
+node tests/dialogue.test.js        # 87 conversation tests, no browser needed
 
 python -m http.server 8123 &       # then, with Playwright installed:
 python tests/browser_test.py       # runs every test case in a real browser with a simulated microphone

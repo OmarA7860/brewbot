@@ -501,6 +501,12 @@ run('"Actually make it a mocha" is still a correction', ['latte', 'actually make
   return p;
 });
 
+run('"How many" names the drink, so it is not mistaken for shots', ['Americano', 'Large', 'Iced', 'Oat milk', 'Extra shot'], function (d, r) {
+  var p = [];
+  expect(/How many large iced americanos would you like\?/.test(r.text) && /large iced americanos/.test(r.spoken || ''), 'names the drink, got: ' + r.text, p);
+  return p;
+});
+
 // Pronunciation: the spoken copy says "mic" as a word, money and times naturally.
 (function () {
   var src = require('fs').readFileSync(__dirname + '/../js/speech.js', 'utf8');

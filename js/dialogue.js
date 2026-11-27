@@ -256,6 +256,13 @@ BB.Dialogue = (function () {
         (ex ? ', or you can give me a time like ' + formatTime(ex) + '.' : '.');
     }
     var said = (extra && extra.short) || this.fails > 0 ? q : SPOKEN_QUESTIONS[slot];
+    // "How many?" right after "extra shot" sounded like it meant shots, so name the drink.
+    if (slot === 'quantity' && this.order.drink) {
+      var cups = this.pluralDrink();
+      q = (extra && extra.short) ? 'How many ' + cups + ' would you like?' :
+        'How many ' + cups + ' would you like? Tap a number or say any number up to 10.';
+      said = 'How many ' + cups + ' would you like?';
+    }
     if (this.order.quantity > 1) {
       q = q.replace('pick it up', 'pick them up').replace('like it hot', 'like them hot');
       said = said.replace('pick it up', 'pick them up');
@@ -309,6 +316,17 @@ BB.Dialogue = (function () {
       return this.reply(text, { mood: 'happy', outcome: 'completed', quick: [{ label: lbl, value: 'Yes, next order' }, { label: 'No thanks', value: 'No thanks' }] });
     }
     return this.reply(text, { mood: 'happy', outcome: 'completed', quick: [{ label: 'Start a new order', value: 'Start a new order' }] });
+  };
+
+  /* "large iced americanos": the drink so far, in the plural. */
+  Dialogue.prototype.pluralDrink = function () {
+    var o = this.order, words = [];
+    if (o.size) words.push(BB.option('size', o.size).label.toLowerCase());
+    if (o.temp === 'iced' && o.drink !== 'coldbrew') words.push('iced');
+    else if (o.temp === 'hot') words.push('hot');
+    var name = BB.option('drink', o.drink).label.toLowerCase();
+    words.push(/s$/.test(name) ? name : name + 's');
+    return words.join(' ');
   };
 
   function describeNext(r) {
